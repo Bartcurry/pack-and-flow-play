@@ -78,6 +78,21 @@
     #shop-body h3 { font-size: clamp(12px, 3.6cqw, 18px); margin-bottom: 1.5cqw; }
     .quick button { padding-inline: 1.4cqw; }
     #shop { border-color: var(--theme-accent, #a3ead0); color: var(--theme-accent, #a3ead0); }
+    #daily { border-color: #bc915c; color: #ffe2a5; background: #473535; }
+    #daily:hover { background: #654941; }
+    .daily-hero { position: relative; overflow: hidden; isolation: isolate; padding: 3.8cqw; margin: 3.7cqw 0 2cqw; border-radius: 3cqw; border: 1px solid #8f6d57; background: radial-gradient(ellipse at 94% 0%, #78563c 0, #493846 50%, #263849 100%); }
+    .daily-hero::after { content: '✦'; position: absolute; right: 3.5cqw; top: -.7cqw; z-index: -1; font-size: 19cqw; color: #ffcf7b22; }
+    .daily-hero h3 { margin: 0; font-size: clamp(16px, 5cqw, 26px); color: #ffe4b6; }
+    .daily-hero p { margin: 2.2cqw 0 0; color: #faead6; font-size: clamp(12px, 3.25cqw, 16px); }
+    .daily-list { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1.15cqw; }
+    .daily-date { display: grid; justify-items: center; gap: .8cqw; min-height: 11cqw; min-width: 0; padding: 1.2cqw 0; font-size: clamp(9px, 2.45cqw, 13px); }
+    .daily-date strong { color: #ffda90; }
+    .daily-date[aria-pressed="true"] { background: #604a46; border-color: #ffda90; }
+    .daily-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 2cqw; }
+    .daily-link { color: #f2f8fc; background: #142634; border: 1px solid #617a90; width: 100%; border-radius: 2cqw; padding: 2cqw; margin-top: 1.8cqw; }
+    #daily-share-status:empty { display: none; }
+    .result .secondary { display: block; width: 100%; min-height: 8cqw; margin-top: 2cqw; }
+    .result[data-outcome="won"] #result-title { color: #ffe4a6; }
   </style>
 </head>
 <body>
@@ -85,14 +100,23 @@
     <canvas id="board" width="720" height="1280" tabindex="0" role="img" aria-describedby="keyboard-help" aria-label="滑块打包棋盘。使用鼠标或手指，把方块拖到顶边的发货口并继续往上推。">你的浏览器不支持 Canvas。</canvas>
     <button id="hint" type="button" aria-label="提示下一步">提示</button>
     <p id="keyboard-help" class="sr-only">键盘：按 E 或回车选择下一件货，Q 选择上一件，方向键移动，H 查看提示。</p>
-    <div class="quick" aria-label="试玩设置"><button id="levels" type="button">关卡</button><button id="shop" type="button" aria-label="梦想小店与图鉴">小店</button><button id="help" type="button" aria-label="玩法说明">帮助</button><button id="sound" type="button" aria-pressed="true">声音</button></div>
+    <div class="quick" aria-label="试玩设置"><button id="daily" type="button" aria-label="每日挑战">挑战</button><button id="levels" type="button">关卡</button><button id="shop" type="button" aria-label="梦想小店与图鉴">小店</button><button id="help" type="button" aria-label="玩法说明">帮助</button><button id="sound" type="button" aria-pressed="true">声音</button></div>
     <p id="status" class="sr-only" role="status">正在加载关卡。</p>
-    <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button></section>
+    <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button><button class="secondary" id="result-share" type="button" hidden>分享本期挑战</button></section>
     <nav class="tools" aria-label="救场道具"><button id="magnet" type="button" title="吸走最多三件匹配货物">磁力</button><button id="shuffle" type="button" title="刷新订单并清理暂存">刷新</button><button id="expand" type="button" title="把暂存扩至四格">扩容</button></nav>
     <nav aria-label="关卡控制"><button id="prev" type="button">← 上一关</button><button id="retry" type="button">重玩</button><button class="primary" id="next" type="button">下一关 →</button></nav>
+    <dialog id="daily-dialog" aria-labelledby="daily-title">
+      <header><div><span class="eyebrow">DAILY SHIFT</span><h2 id="daily-title">每日挑战</h2></div><form method="dialog"><button type="submit" aria-label="关闭每日挑战">关闭</button></form></header>
+      <section class="daily-hero"><h3 id="daily-date"></h3><p id="daily-best"></p></section>
+      <p class="intro">每天北京时间零点换一张棋盘。也可以补玩最近七天，或把当日棋盘发给朋友。</p>
+      <div class="daily-list" id="daily-list" aria-label="选择挑战日期"></div>
+      <p class="intro">通关、不用道具、在目标用时内，各得一枚奖章。挑战奖章与小店星星分开计算。</p>
+      <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
+      <input id="daily-link" class="daily-link" type="url" readonly hidden aria-label="可复制的挑战链接"><p id="daily-share-status" class="intro" role="status"></p>
+    </dialog>
     <dialog id="stage-dialog" aria-labelledby="stage-title"><header><div><span class="eyebrow">SHIFT SELECT</span><h2 id="stage-title">关卡地图</h2></div><form method="dialog"><button type="submit" aria-label="关闭关卡地图">关闭</button></form></header><p class="intro" id="stage-summary"></p><div class="map-toolbar"><button id="map-prev" type="button" aria-label="关卡地图上一页">←</button><select id="stage-chapter" aria-label="选择章节"></select><button id="map-next" type="button" aria-label="关卡地图下一页">→</button></div><div class="stages" id="stage-list"></div><button id="map-resume" class="primary wide" type="button">继续进度 →</button></dialog>
     <dialog id="shop-dialog" aria-labelledby="shop-title"><header><div><span class="eyebrow">AFTER HOURS</span><h2 id="shop-title">梦想小店</h2></div><form method="dialog"><button type="submit" aria-label="关闭梦想小店">关闭</button></form></header><div class="shop-tabs" id="shop-tabs" aria-label="小店栏目"></div><div id="shop-body"></div></dialog>
-    <dialog id="help-dialog" aria-labelledby="help-title"><header><div><span class="eyebrow">PACKING MANUAL</span><h2 id="help-title">如何打包</h2></div><form method="dialog"><button type="submit" aria-label="关闭玩法说明">关闭</button></form></header><ol class="steps"><li><strong>滑到出口：</strong>拖动方块对齐绿色发货口，再继续向上推。</li><li><strong>按色装箱：</strong>传送带接收匹配颜色；暂时没订单时会进入缓冲槽。</li><li><strong>腾出空间：</strong>暂存满时，先处理能直装的货物，或使用底部道具。</li></ol><p class="intro">货物与暂存都清空即过关。拿不准时可点棋盘下方的「提示」。打开帮助、地图或小店时，游戏会暂停。</p><p class="intro">键盘：聚焦棋盘后，按 Q / E 选货，方向键移动，H 查看提示。</p><form method="dialog"><button class="primary wide" type="submit">回到棋盘</button></form></dialog>
+    <dialog id="help-dialog" aria-labelledby="help-title"><header><div><span class="eyebrow">PACKING MANUAL</span><h2 id="help-title">如何打包</h2></div><form method="dialog"><button type="submit" aria-label="关闭玩法说明">关闭</button></form></header><ol class="steps"><li><strong>滑到出口：</strong>拖动方块对齐绿色发货口，再继续向上推。</li><li><strong>按色装箱：</strong>传送带接收匹配颜色；暂时没订单时会进入缓冲槽。</li><li><strong>腾出空间：</strong>暂存满时，先处理能直装的货物，或使用底部道具。</li></ol><p class="intro">货物与暂存都清空即过关。拿不准时可点棋盘下方的「提示」。打开帮助、地图、小店或挑战菜单时，游戏会暂停。</p><p class="intro">键盘：聚焦棋盘后，按 Q / E 选货，方向键移动，H 查看提示。</p><form method="dialog"><button class="primary wide" type="submit">回到棋盘</button></form></dialog>
   </main>
   <script id="flow-config" type="application/json">{"themes":[{"id":"bbq","name":"深夜烟火烧烤摊","packageName":"锡纸打包盒","baseColor":"#2e2030","panel":"#492a3d","accent":"#ffd48d","box":"#d5dce1","edge":"#474452","sound":{"pitch":350,"cutoff":1550,"knock":158,"wave":"triangle"},"items":{"RED":{"name":"肉串","key":"skewer","path":"M5 27L27 5 M8 17l5-5 5 5-5 5z M16 9l5-5 5 5-5 5z"},"YELLOW":{"name":"烤玉米","key":"corn","path":"M9 24C4 17 12 4 21 4c9 0 9 9 4 15l-8 8c-3 3-6 1-8-3z M10 18l12-10 M13 23l12-11 M9 13l11 9 M13 8l11 9"},"GREEN":{"name":"烤青椒","key":"pepper","path":"M24 4c-4 0-6 2-6 6m5 0c6 6 0 14-15 17C3 28 3 25 7 23c7-4 6-14 12-14z"},"BLUE":{"name":"冰啤酒","key":"beer","path":"M12 3h8v8l4 5v11H8V16l4-5z M10 17h12v7H10z M12 7h8"},"PURPLE":{"name":"炭烤大虾","key":"shrimp","path":"M26 9C19-2 6 3 5 13c0 7 8 11 14 7l3-4-7-2-1-4 4-2 4 3 5-6 M9 8l5 4m-8 2 8 1m-6 4 9-2m2 3 6 6-1-7"}},"corner":12,"finish":"foil"},{"id":"cosmetics","name":"精致美妆台","packageName":"丝绒礼盒","baseColor":"#34243e","panel":"#503650","accent":"#f8badc","box":"#f0cfdf","edge":"#643957","sound":{"pitch":523,"cutoff":2840,"knock":290,"wave":"sine"},"items":{"RED":{"name":"口红","key":"lipstick","path":"M10 16h12v12H10z M12 16V6l7-3 1 2v11 M10 21h12"},"YELLOW":{"name":"香水瓶","key":"perfume","path":"M12 4h8v6h-8z M11 10h10l5 6v11H6V16z M11 17h10v5H11z"},"GREEN":{"name":"粉扑","key":"puff","path":"M5 16c0-7 5-10 11-10s11 3 11 10-5 10-11 10S5 23 5 16z M7 12l17 9 M9 10l17 8"},"BLUE":{"name":"眼影盘","key":"shadow","path":"M5 8h22v17H5z M8 12h6v9H8z M18 12h6v9h-6z"},"PURPLE":{"name":"指甲油","key":"polish","path":"M12 3h8v9h-8z M10 12h12l3 4v11H7V16z M11 18h10v5H11z"}},"corner":20,"finish":"velvet"},{"id":"grocery","name":"复古童年杂货铺","packageName":"牛皮纸袋","baseColor":"#302820","panel":"#53412d","accent":"#f9ce94","box":"#ecd1a5","edge":"#624524","sound":{"pitch":392,"cutoff":930,"knock":128,"wave":"triangle"},"items":{"RED":{"name":"奶糖","key":"candy","path":"M10 11h12v10H10z M10 12L4 7v18l6-5 M22 12l6-5v18l-6-5 M13 16h6"},"YELLOW":{"name":"铁皮青蛙","key":"frog","path":"M8 13a4 4 0 118-1 4 4 0 118 1l4 7-5 5H9l-5-5z M11 17h.1 M21 17h.1 M12 21c2 2 6 2 8 0"},"GREEN":{"name":"玻璃汽水","key":"soda","path":"M12 3h8v5l-2 3 5 6v11H9V17l5-6-2-3z M10 18h12m-12 5h12"},"BLUE":{"name":"复古磁带","key":"tape","path":"M4 8h24v16H4z M8 12h16v6H8z M11 15h.1 M21 15h.1 M11 24l2-4h6l2 4"},"PURPLE":{"name":"弹珠","key":"marbles","path":"M14 7a5 5 0 110 10 5 5 0 010-10z M8 17a5 5 0 110 10 5 5 0 010-10z M22 15a6 6 0 110 12 6 6 0 010-12z"}},"corner":7,"finish":"kraft"},{"id":"bento","name":"日式元气便当屋","packageName":"漆器便当盒","baseColor":"#1a3031","panel":"#294747","accent":"#a9efcf","box":"#e3bc9b","edge":"#682f28","sound":{"pitch":440,"cutoff":620,"knock":110,"wave":"sine"},"items":{"RED":{"name":"章鱼香肠","key":"octopus","path":"M10 19V9a6 6 0 0112 0v10 M10 17l-5 8 M14 17l-2 10 M18 17l2 10 M22 17l5 8 M13 11h.1 M19 11h.1"},"YELLOW":{"name":"玉子烧","key":"egg","path":"M5 12l14-6 8 5v12l-14 4-8-5z M5 12l8 5 14-6 M13 17v10 M8 20l5 3 14-5"},"GREEN":{"name":"毛豆串","key":"edamame","path":"M4 19c7-7 14-13 23-12 1 9-5 17-15 19z M11 19h1 M17 15h1 M22 11h1"},"BLUE":{"name":"三角饭团","key":"rice","path":"M16 4c2 0 12 15 12 19 0 3-5 4-12 4s-12-1-12-4S14 4 16 4z M12 27V17h8v10"},"PURPLE":{"name":"腌萝卜","key":"pickle","path":"M10 5l13 2 4 8-7 12-12-3-3-10z M8 12l14 9 M9 7l16 10 M7 17l12 8"}},"corner":8,"finish":"lacquer"}],"renovations":[{"id":"sign","name":"暖光招牌","symbol":"⋆","x":50,"y":15,"cost":1},{"id":"counter","name":"原木吧台","symbol":"▤","x":50,"y":65,"cost":1},{"id":"awning","name":"条纹遮阳棚","symbol":"▰","x":50,"y":32,"cost":1},{"id":"table","name":"靠窗餐桌","symbol":"◒","x":75,"y":70,"cost":1},{"id":"plants","name":"窗台盆栽","symbol":"✿","x":27,"y":53,"cost":1},{"id":"lights","name":"吊灯串","symbol":"✧","x":71,"y":47,"cost":1},{"id":"shelf","name":"货架","symbol":"▦","x":29,"y":73,"cost":1},{"id":"menu","name":"手写菜单","symbol":"☷","x":76,"y":55,"cost":1},{"id":"mat","name":"迎客地垫","symbol":"⬒","x":49,"y":85,"cost":1},{"id":"cat","name":"招财小猫","symbol":"♧","x":20,"y":85,"cost":1}],"generation":{"chapterSize":30,"modes":[{"title":"开门热身","size":6,"pieces":20,"maxDepth":5,"coverage":0.59},{"title":"顺流连单","size":6,"pieces":24,"maxDepth":5,"coverage":0.68},{"title":"错位分拣","size":7,"pieces":33,"maxDepth":6,"rail":true,"coverage":0.75},{"title":"高峰拼单","size":7,"pieces":39,"maxDepth":6,"rail":true,"mixed":true,"coverage":0.84},{"title":"满屏大丰收","size":7,"pieces":41,"maxDepth":6,"reward":true,"coverage":0.88}]},"palette":{"RED":{"label":"红","code":"R","fill":"#ef775e","ink":"#632b24"},"YELLOW":{"label":"黄","code":"Y","fill":"#f1c657","ink":"#694b16"},"BLUE":{"label":"蓝","code":"B","fill":"#84addc","ink":"#243e65"},"GREEN":{"label":"绿","code":"G","fill":"#9dcc9c","ink":"#2d543e"},"PURPLE":{"label":"紫","code":"P","fill":"#c0a2d7","ink":"#4e346b"}},"levels":[{"title":"初次发货","tip":"把方块移到亮色发货口，再往上推。","cols":6,"rows":6,"gates":[1,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":2},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":4,"y":4},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":1,"y":4},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":2,"y":3},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":5,"y":2},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":5},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":2},{"id":"BOX-02","color":"YELLOW","count":2},{"id":"BOX-03","color":"BLUE","count":2},{"id":"BOX-04","color":"GREEN","count":2}]},{"title":"腾出通道","tip":"长条不会旋转。紫色可以先放进暂存槽。","cols":6,"rows":6,"gates":[1,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":3},"shape":[[0,0],[0,1]]},{"id":"r2","color":"RED","origin":{"x":4,"y":2},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":1,"y":1},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":3,"y":4},"shape":[[0,0],[0,1]]},{"id":"b1","color":"BLUE","origin":{"x":3,"y":1},"shape":[[0,0],[1,0]]},{"id":"b2","color":"BLUE","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":2},"shape":[[0,0],[0,1]]},{"id":"g2","color":"GREEN","origin":{"x":4,"y":5},"shape":[[0,0],[1,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":5},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":2,"y":3},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":2},{"id":"BOX-02","color":"YELLOW","count":2},{"id":"BOX-03","color":"BLUE","count":2},{"id":"BOX-04","color":"GREEN","count":2},{"id":"BOX-05","color":"PURPLE","count":2}]},{"title":"转个弯再出发","tip":"斜拖可以借空位拐弯。留意暂存区的 3 格上限。","cols":7,"rows":7,"gates":[1,3,5],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":2},"shape":[[0,0],[0,1],[1,1]]},{"id":"r2","color":"RED","origin":{"x":5,"y":1},"shape":[[0,0]]},{"id":"r3","color":"RED","origin":{"x":2,"y":5},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":3,"y":1},"shape":[[0,0],[1,0]]},{"id":"y2","color":"YELLOW","origin":{"x":4,"y":4},"shape":[[0,0]]},{"id":"y3","color":"YELLOW","origin":{"x":5,"y":5},"shape":[[0,0],[0,1]]},{"id":"b1","color":"BLUE","origin":{"x":0,"y":1},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":3},"shape":[[0,0],[1,0],[0,1]]},{"id":"b3","color":"BLUE","origin":{"x":6,"y":3},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":1,"y":5},"shape":[[0,0],[0,1]]},{"id":"g2","color":"GREEN","origin":{"x":5,"y":3},"shape":[[0,0]]},{"id":"g3","color":"GREEN","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":0},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":4,"y":2},"shape":[[0,0]]},{"id":"p3","color":"PURPLE","origin":{"x":6,"y":0},"shape":[[0,0]]},{"id":"p4","color":"PURPLE","origin":{"x":0,"y":6},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":3},{"id":"BOX-02","color":"YELLOW","count":3},{"id":"BOX-03","color":"BLUE","count":3},{"id":"BOX-04","color":"GREEN","count":3},{"id":"BOX-05","color":"PURPLE","count":2},{"id":"BOX-06","color":"PURPLE","count":2}]},{"title":"拆膜拼单","tip":"发走相邻货物，拆掉冰冻；双色订单按色装箱。","cols":6,"rows":6,"gates":[1,2,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]],"lockCount":2},{"id":"r2","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":2,"y":0},"shape":[[0,0],[0,1]]},{"id":"y2","color":"YELLOW","origin":{"x":4,"y":3},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":4,"y":0},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":4},"shape":[[0,0]]}],"orders":[{"id":"MIX-01","color":"RED","count":2,"colors":["RED","YELLOW"]},{"id":"RED-01","color":"RED","count":1,"colors":["RED"]},{"id":"MIX-02","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"BLUE-01","color":"BLUE","count":2,"colors":["BLUE","BLUE"]}]},{"title":"单向开箱","tip":"箭头格只能顺箭头滑；清空盲盒周围一圈。","cols":6,"rows":6,"gates":[1,4],"rails":[{"x":1,"y":2,"dir":"UP"},{"x":1,"y":3,"dir":"UP"}],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":5,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":5},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":0,"y":3},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":4},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":5},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":3},"shape":[[0,0]]},{"id":"m1","color":"PURPLE","origin":{"x":3,"y":3},"shape":[[0,0],[1,0],[0,1],[1,1]],"isMysteryBox":true,"drops":["YELLOW","PURPLE"]}],"orders":[{"id":"BLUE-01","color":"BLUE","count":2,"colors":["BLUE","BLUE"]},{"id":"RED-01","color":"RED","count":2,"colors":["RED","RED"]},{"id":"YELLOW-01","color":"YELLOW","count":2,"colors":["YELLOW","YELLOW"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]}]},{"title":"闪送急单","tip":"15 秒内装满 VIP 触发吸货，超时仍可正常装箱。","cols":7,"rows":7,"gates":[1,3,5],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":3},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":4},"shape":[[0,0],[1,0]]},{"id":"b3","color":"BLUE","origin":{"x":5,"y":2},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":3,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":2},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":6,"y":3},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":6},"shape":[[0,0]]}],"orders":[{"id":"VIP-01","color":"RED","count":1,"colors":["RED"],"vipSeconds":15},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-02","color":"RED","count":2,"colors":["RED","GREEN"]}]},{"title":"冷库补货","tip":"先拆掉出口旁的冰冻，再清空盲盒周围。","cols":7,"rows":7,"gates":[1,3,5],"rails":[{"x":1,"y":1,"dir":"UP"},{"x":1,"y":2,"dir":"UP"},{"x":1,"y":3,"dir":"UP"}],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":2,"y":1},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]],"lockCount":2},{"id":"b1","color":"BLUE","origin":{"x":1,"y":4},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":6,"y":4},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":4,"y":3},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":3,"y":5},"shape":[[0,0]]},{"id":"m1","color":"PURPLE","origin":{"x":4,"y":4},"shape":[[0,0],[1,0],[0,1],[1,1]],"isMysteryBox":true,"drops":["BLUE","PURPLE"]}],"orders":[{"id":"RED-01","color":"RED","count":2,"colors":["RED","RED"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]}]},{"title":"截单前夜","tip":"限时 75 秒。先发 VIP，再把货物分流到四个出口。","cols":8,"rows":8,"gates":[1,3,4,6],"timeLimit":75,"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":2},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":0,"y":6},"shape":[[0,0],[0,1],[1,1]]},{"id":"b3","color":"BLUE","origin":{"x":5,"y":4},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":6,"y":0},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":3,"y":3},"shape":[[0,0],[1,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":6},"shape":[[0,0],[0,1]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":4},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":6,"y":6},"shape":[[0,0],[0,1],[1,1]]},{"id":"y2","color":"YELLOW","origin":{"x":6,"y":2},"shape":[[0,0],[0,1]]},{"id":"r3","color":"RED","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"b4","color":"BLUE","origin":{"x":4,"y":6},"shape":[[0,0]]}],"orders":[{"id":"VIP-01","color":"RED","count":1,"colors":["RED"],"vipSeconds":12},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"MIX-02","color":"RED","count":2,"colors":["RED","GREEN"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-03","color":"YELLOW","count":3,"colors":["YELLOW","RED","BLUE"]}]}]}</script>
   <script type="module">export const COLORS = ['RED', 'YELLOW', 'GREEN', 'BLUE', 'PURPLE']         ;
@@ -715,6 +739,58 @@ export function generateStage(index        , modes        ) {
 }
 
 
+const DAY_MS = 86400000;
+const CHINA_OFFSET = 8 * 3600000;
+                                                                            
+                                                      
+
+export function chinaDay(timestamp = Date.now()) {
+  return new Date(timestamp + CHINA_OFFSET).toISOString().slice(0, 10);
+}
+
+export function dailySerial(key        ) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const timestamp = Date.parse(key + 'T00:00:00Z');
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== key || timestamp < 0) return null;
+  return timestamp / DAY_MS;
+}
+
+export function dailyOffset(day        , delta        ) {
+  const serial = dailySerial(day);
+  if (serial === null) throw Error('Invalid daily date');
+  return new Date((serial + delta) * DAY_MS).toISOString().slice(0, 10);
+}
+
+export function makeDaily(day        , modes        ) {
+  const serial = dailySerial(day);
+  if (serial === null) throw Error('Invalid daily date');
+  const base = 1000000 + serial * modes.length + serial % modes.length;
+  const generated = generateStage(base, modes);
+  return { ...generated, par: 30 + generated.level.items.length * 5, serial };
+}
+
+export function dailyScore(seconds        , combo        , tools        , par        )             {
+  return { medals: 1 + Number(tools === 0) + Number(seconds <= par), seconds: Math.round(Math.max(0, seconds) * 10) / 10, combo: Math.max(1, combo) };
+}
+
+export function bestDaily(current                        , candidate            ) {
+  if (!current || candidate.medals > current.medals || (candidate.medals === current.medals && (
+    candidate.seconds < current.seconds || (candidate.seconds === current.seconds && candidate.combo > current.combo)
+  ))) return candidate;
+  return current;
+}
+
+export function readDailyRecords(value         )               {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const records               = {};
+  for (const [day, score] of Object.entries(value)) {
+    if (dailySerial(day) === null || !score || !Number.isInteger(score.medals) || score.medals < 1 || score.medals > 3 || !Number.isFinite(score.seconds) || score.seconds < 0 || !Number.isInteger(score.combo) || score.combo < 1) continue;
+    records[day] = { medals: score.medals, seconds: score.seconds, combo: score.combo };
+  }
+  return records;
+}
+
+
                                                                                                                                                                                                                                                                                                                                                                       
                                                                                                           
                                                                                                                                        
@@ -794,6 +870,23 @@ const resultTag = document.getElementById('result-tag') ;
 const resultTitle = document.getElementById('result-title') ;
 const resultDetail = document.getElementById('result-detail') ;
 const resultAction = document.querySelector                   ('#result-action') ;
+const resultShare = document.querySelector                   ('#result-share') ;
+const dailyButton = document.querySelector                   ('#daily') ;
+const dailyDialog = document.querySelector                   ('#daily-dialog') ;
+const dailyList = document.getElementById('daily-list') ;
+const dailyDate = document.getElementById('daily-date') ;
+const dailyBest = document.getElementById('daily-best') ;
+const dailyLinkField = document.querySelector                  ('#daily-link') ;
+const dailyShareStatus = document.getElementById('daily-share-status') ;
+const dailyRecords = readDailyRecords(stored('pack-flow.daily-records', {}));
+const sharedDay = new URL(location.href).searchParams.get('daily');
+let currentDaily = sharedDay !== null && dailySerial(sharedDay) !== null && sharedDay <= chinaDay() ? sharedDay : null;
+let dailySelection = currentDaily ?? chinaDay();
+let dailyRound = currentDaily ? makeDaily(currentDaily, modes) : null;
+let elapsedPlay = 0;
+let toolsUsed = 0;
+let finishedDaily                        ;
+let newDailyRecord = false;
 const HEIGHT = 1280;
 const INK = '#223a42';
 const MUTED = '#a7bfd0';
@@ -806,7 +899,7 @@ const lastStage = stored        ('pack-flow.last-stage', 0);
 let levelIndex = Number.isSafeInteger(lastStage) && lastStage >= 0 ? lastStage : 0;
 const toolButtons                                  = { MAGNET: document.querySelector                   ('#magnet') , SHUFFLE_BELT: document.querySelector                   ('#shuffle') , EXPAND_SLOT: document.querySelector                   ('#expand')  };
 const toolNames                       = { MAGNET: '磁力', SHUFFLE_BELT: '刷新', EXPAND_SLOT: '扩容' };
-let game = createGame(levelAt(levelIndex), readFailures());
+let game = dailyRound ? createGame(dailyRound.level) : createGame(levelAt(levelIndex), readFailures());
 const hintButton = document.querySelector                   ('#hint') ;
 let keyboardId                    ;
 let hint              = null;
@@ -854,7 +947,7 @@ function saveProgress() {
 }
 
 function applyTheme() {
-  theme = catalog.themes.find(candidate => candidate.id === themeChoice) ?? campaignTheme(levelIndex);
+  theme = catalog.themes.find(candidate => candidate.id === themeChoice) ?? (dailyRound ? catalog.themes[dailyRound.serial % catalog.themes.length] : campaignTheme(levelIndex));
   document.querySelector('main') .style.setProperty('--theme-accent', theme.accent);
 }
 
@@ -984,16 +1077,81 @@ function showShop() {
   shopDialog.showModal();
 }
 
+function dailyString(score            ) {
+  return '★'.repeat(score.medals) + '☆'.repeat(3 - score.medals) + '  ·  ' + score.seconds.toFixed(1) + ' 秒  ·  连击 ×' + score.combo;
+}
+
+function dailyURL(day        ) {
+  const link = new URL(location.href);
+  link.searchParams.set('daily', day);
+  link.hash = '';
+  return link.href;
+}
+
+function renderDaily() {
+  const today = chinaDay();
+  const keys = Array.from({ length: 7 }, (_, index) => dailyOffset(today, -index));
+  if (!keys.includes(dailySelection)) keys.push(dailySelection);
+  dailyDate.textContent = dailySelection === today ? '今天 · ' + dailySelection : dailySelection;
+  const record = dailyRecords[dailySelection];
+  dailyBest.textContent = record ? '个人最佳：' + dailyString(record) : '尚未通关 · 首次完成可获得挑战奖章';
+  dailyList.replaceChildren(...keys.map((day, index) => {
+    const score = dailyRecords[day];
+    const button = makeButton('', () => {
+      dailySelection = day; renderDaily();
+      dailyList.querySelector                   ('[aria-pressed="true"]')?.focus();
+    }, 'daily-date');
+    button.setAttribute('aria-pressed', String(day === dailySelection));
+    const label = document.createElement('span');
+    label.textContent = index === 0 ? '今天' : day.slice(5);
+    const medals = document.createElement('strong');
+    medals.textContent = score ? '★' + score.medals : '·';
+    button.append(label, medals);
+    return button;
+  }));
+  dailyLinkField.value = dailyURL(dailySelection);
+  dailyLinkField.hidden = true;
+  dailyShareStatus.textContent = '';
+}
+
+function showDaily(day = chinaDay()) {
+  cancelDrag();
+  dailySelection = day;
+  renderDaily();
+  dailyDialog.showModal();
+}
+
+async function shareDaily(day        ) {
+  try {
+    await navigator.clipboard.writeText(dailyURL(day));
+    if (dailyDialog.open && dailySelection === day) dailyShareStatus.textContent = '链接已复制';
+  } catch {
+    if (!dailyDialog.open || dailySelection !== day) return;
+    dailyLinkField.hidden = false;
+    dailyLinkField.focus();
+    dailyLinkField.select();
+    dailyShareStatus.textContent = '复制文本框里的链接即可分享';
+  }
+}
+
 function recordResult() {
   if (game.status === recorded) return;
   recorded = game.status;
-  try {
-    localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1));
-
-  } catch {}
+  if (!currentDaily) {
+    try { localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1)); } catch {}
+  }
   if (game.status === 'won') {
-    earnedStar = clearStage(progress, levelIndex);
-    if (earnedStar) saveProgress();
+    if (currentDaily && dailyRound) {
+      finishedDaily = dailyScore(elapsedPlay, bestCombo, toolsUsed, dailyRound.par);
+      const previousScore = dailyRecords[currentDaily];
+      const best = bestDaily(previousScore, finishedDaily);
+      newDailyRecord = best !== previousScore;
+      dailyRecords[currentDaily] = best;
+      try { localStorage.setItem('pack-flow.daily-records', JSON.stringify(dailyRecords)); } catch {}
+    } else {
+      earnedStar = clearStage(progress, levelIndex);
+      if (earnedStar) saveProgress();
+    }
     sound.play('win');
     scatter({ x: 360, y: 566 }, MINT, 24, 196);
   }
@@ -1219,8 +1377,10 @@ function drawHint() {
 function board() {
   const grid = geometry();
   const stageNumber = String(levelIndex + 1).padStart(2, '0');
-  text(stageNumber + '  /  ' + game.level.title, 40, 334, 29, '#f2f8fc', 850);
-  text(game.remaining === null ? levelIndex < storyLength ? '第 ' + (Math.floor(levelIndex / chapterSize) + 1) + ' 章' : '无限班次' : '剩余 ' + Math.ceil(game.remaining) + ' 秒', 680, 334, 17, game.remaining !== null && game.remaining < 10 ? '#ffc093' : MUTED, 850, 'right');
+  const header = currentDaily ? '挑战  /  ' + currentDaily.slice(5).replace('-', '.') + '  ' + game.level.title : stageNumber + '  /  ' + game.level.title;
+  text(header, 40, 334, currentDaily ? 25 : 29, '#f2f8fc', 850);
+  const clock = currentDaily ? '用时 ' + Math.floor(elapsedPlay) + ' 秒' : game.remaining === null ? (levelIndex < storyLength ? '第 ' + (Math.floor(levelIndex / chapterSize) + 1) + ' 章' : '无限班次') : '剩余 ' + Math.ceil(game.remaining) + ' 秒';
+  text(clock, 680, 334, 17, game.remaining !== null && game.remaining < 10 ? '#ffc093' : MUTED, 850, 'right');
   ctx.save();
   if (shakeUntil > now && !reduced.matches) {
     const strength = (shakeUntil - now) / 200;
@@ -1252,7 +1412,7 @@ function board() {
   drawHint();
   ctx.restore();
   rect(38, 1019, 644, 38, 10, theme.panel);
-  const tip = hintUntil > now ? notice : game.level.tip;
+  const tip = hintUntil > now ? notice : dailyRound ? '通关 · 不用道具 · ' + dailyRound.par + ' 秒内，各得一枚奖章' : game.level.tip;
   ctx.save();
   ctx.beginPath();
   ctx.rect(48, 1019, 530, 38);
@@ -1332,6 +1492,14 @@ function updateResult() {
   if (resultCard.hidden || resultCard.dataset.outcome === game.status) return;
   resultCard.dataset.outcome = game.status;
   const won = game.status === 'won';
+  resultShare.hidden = !currentDaily;
+  if (finishedDaily) {
+    resultTag.textContent = newDailyRecord ? 'PERSONAL BEST · 新纪录' : 'DAILY SHIFT · 挑战完成';
+    resultTitle.textContent = '★'.repeat(finishedDaily.medals) + '☆'.repeat(3 - finishedDaily.medals);
+    resultDetail.textContent = '用时 ' + finishedDaily.seconds.toFixed(1) + ' 秒 · 最高连击 ×' + finishedDaily.combo + ' · 道具 ' + toolsUsed;
+    resultAction.textContent = '再挑战一次';
+    return;
+  }
   resultTag.textContent = won ? earnedStar ? '★ +1 整理星星' : 'ORDER COMPLETE' : 'SHIFT PAUSED';
   resultTitle.textContent = won ? '打包完成！' : '这一单还差一点';
   resultDetail.textContent = won ? '已装箱 ' + game.packed + ' 件 · 最高连击 ×' + Math.max(1, bestCombo) : game.remaining === 0 ? '时间到了。可以重玩本关。' : '暂存槽已满。试试先发出能直装的货物。';
@@ -1376,9 +1544,13 @@ function consume(event           ) {
 }
 
 function updateControls() {
-  previous.disabled = levelIndex === 0;
+  previous.disabled = !currentDaily && levelIndex === 0;
   hintButton.disabled = game.status !== 'playing';
-  next.disabled = levelIndex >= Number.MAX_SAFE_INTEGER - 1;
+  next.disabled = !currentDaily && levelIndex >= Number.MAX_SAFE_INTEGER - 1;
+  const previousLabel = currentDaily ? '← 回主线' : '← 上一关';
+  const nextLabel = currentDaily ? '挑战列表' : '下一关 →';
+  if (previous.textContent !== previousLabel) previous.textContent = previousLabel;
+  if (next.textContent !== nextLabel) next.textContent = nextLabel;
   for (const tool of Object.keys(toolNames)          ) {
     const button = toolButtons[tool];
     const label = toolNames[tool] + ' ×' + game.tools[tool];
@@ -1393,13 +1565,18 @@ function frame(time        ) {
   now = time;
   const elapsed = Math.min(0.1, Math.max(0, (time - lastTime) / 1000));
   lastTime = time;
-  if (!document.hidden && !stageDialog.open && !helpDialog.open && !shopDialog.open) {
+  if (!document.hidden && !stageDialog.open && !helpDialog.open && !shopDialog.open && !dailyDialog.open) {
+    if (game.status === 'playing') elapsedPlay += elapsed;
     tick(game, elapsed);
     beltOffset = (beltOffset + elapsed * (game.level.beltSpeed ?? 76)) % 36;
   }
   for (const event of game.events.splice(0)) consume(event);
   recordResult();
-  ctx.fillStyle = theme.baseColor;
+  const backdrop = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+  backdrop.addColorStop(0, theme.panel);
+  backdrop.addColorStop(0.44, theme.baseColor);
+  backdrop.addColorStop(1, '#0e1e2c');
+  ctx.fillStyle = backdrop;
   ctx.fillRect(0, 0, BELT_WIDTH, HEIGHT);
   belt();
   board();
@@ -1451,7 +1628,7 @@ function cancelDrag() {
 }
 
 canvas.addEventListener('pointerdown', event => {
-  if (drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || event.button !== 0) return;
+  if (drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open || event.button !== 0) return;
   sound.activate();
   keyboardId = undefined;
   hint = null;
@@ -1490,7 +1667,7 @@ function showHint() {
 
 hintButton.addEventListener('click', showHint);
 canvas.addEventListener('keydown', event => {
-  if (event.altKey || event.ctrlKey || event.metaKey || drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open) return;
   const direction = arrowKeys[event.key];
   const key = event.key.toLowerCase();
   if (!direction && !['enter', ' ', 'q', 'e', 'h', 'escape'].includes(key)) return;
@@ -1508,18 +1685,36 @@ canvas.addEventListener('keydown', event => {
   if (result === 'packed' || result === 'buffered') keyboardId = undefined;
 });
 
-function load(index        ) {
+function setDailyAddress(day               ) {
+  const link = new URL(location.href);
+  if (day) link.searchParams.set('daily', day);
+  else link.searchParams.delete('daily');
+  if (link.href !== location.href) {
+    try { history.replaceState(null, '', link); } catch {}
+  }
+}
+
+function load(index        , day                = null) {
   if (!Number.isSafeInteger(index) || index < 0) return;
   for (const event of game.events.splice(0)) consume(event);
   recordResult();
   cancelDrag();
   levelIndex = index;
-  try { localStorage.setItem('pack-flow.last-stage', JSON.stringify(index)); } catch {}
+  currentDaily = day;
+  dailyRound = day ? makeDaily(day, modes) : null;
+  setDailyAddress(day);
+  if (!day) {
+    try { localStorage.setItem('pack-flow.last-stage', JSON.stringify(index)); } catch {}
+  }
+  elapsedPlay = 0;
+  toolsUsed = 0;
+  finishedDaily = undefined;
+  newDailyRecord = false;
   keyboardId = undefined;
   hint = null;
   hintUntil = 0;
   applyTheme();
-  game = createGame(levelAt(index), readFailures());
+  game = dailyRound ? createGame(dailyRound.level) : createGame(levelAt(index), readFailures());
   recorded = 'playing';
   notice = '';
   noticeUntil = 0;
@@ -1536,14 +1731,24 @@ function load(index        ) {
   warnUntil = 0;
   updateControls();
 }
-previous.addEventListener('click', () => load(levelIndex - 1));
-retry.addEventListener('click', () => load(levelIndex));
-next.addEventListener('click', () => load(levelIndex + 1));
+previous.addEventListener('click', () => load(currentDaily ? levelIndex : levelIndex - 1));
+retry.addEventListener('click', () => load(levelIndex, currentDaily));
+next.addEventListener('click', () => { if (currentDaily) showDaily(currentDaily); else load(levelIndex + 1); });
+dailyButton.addEventListener('click', () => showDaily());
+document.getElementById('daily-start') .addEventListener('click', () => {
+  dailyDialog.close();
+  load(levelIndex, dailySelection);
+});
+document.getElementById('daily-copy') .addEventListener('click', () => { void shareDaily(dailySelection); });
+dailyLinkField.addEventListener('focus', () => dailyLinkField.select());
+resultShare.addEventListener('click', () => {
+  if (currentDaily) showDaily(currentDaily);
+});
 levelsButton.addEventListener('click', () => { cancelDrag(); showStages(); });
 helpButton.addEventListener('click', () => { cancelDrag(); helpDialog.showModal(); });
 soundButton.addEventListener('click', () => { sound.toggle(); updateSoundButton(); });
 resultAction.addEventListener('click', () => {
-  if (game.status === 'lost') load(levelIndex);
+  if (currentDaily || game.status === 'lost') load(levelIndex, currentDaily);
   else if (game.status === 'won') load(levelIndex + 1);
 });
 for (const tool of Object.keys(toolNames)          ) {
@@ -1553,6 +1758,7 @@ for (const tool of Object.keys(toolNames)          ) {
       if (tool === 'MAGNET' && game.status === 'playing' && game.tools.MAGNET) announce('磁力需要当前订单中有可匹配的货物');
       return;
     }
+    toolsUsed++;
     sound.play('tool');
     hint = null;
     hintUntil = 0;
