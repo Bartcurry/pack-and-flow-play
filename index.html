@@ -1,0 +1,1589 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>万物打包师 · Pack &amp; Flow</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, "Microsoft YaHei", sans-serif; background: #0c1522; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 24%, #263c54 0, #101c2b 52%, #0b121d 100%); overscroll-behavior: none; }
+    main { position: relative; width: min(100vw, 56.25svh); aspect-ratio: 9/16; overflow: hidden; isolation: isolate; background: #122334; box-shadow: 0 24px 100px #050d18b3; container-type: inline-size; }
+    canvas:focus-visible { outline: 2px solid var(--theme-accent, #a3ead0); outline-offset: -3px; }
+    #hint { position: absolute; top: 79.65%; right: 5.85%; height: 2.92%; min-width: 12%; padding-inline: 1.1cqw; font-size: clamp(10px, 2.75cqw, 14px); color: #fff0c0; background: #463b36; border-color: #a2774a; }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; }
+    [hidden] { display: none !important; }
+    button { appearance: none; border: 1px solid #42566b; border-radius: 2.4cqw; background: #253649; color: #f4f8fb; font: 760 clamp(11px, 3.4cqw, 17px)/1.15 system-ui, sans-serif; cursor: pointer; text-wrap: nowrap; transition: background 140ms ease, transform 140ms ease, border-color 140ms ease; }
+    button:not(:disabled):hover { background: #33495e; border-color: #7a9aaf; }
+    button:not(:disabled):active { transform: translateY(1px); }
+    button:disabled { opacity: 0.42; cursor: default; }
+    button:focus-visible { outline: 2px solid #ffcc77; outline-offset: 2px; }
+    .quick { position: absolute; z-index: 1; inset: 3.6% 5.55% auto auto; display: flex; gap: 1.1cqw; }
+    .quick button { min-height: 7.4cqw; padding: 0 1.7cqw; background: #182d41; font-size: clamp(10px, 2.7cqw, 14px); }
+    .quick button[aria-pressed="true"] { color: #a5f4da; border-color: #46796f; }
+    nav { position: absolute; inset: auto 5.55% 1.35%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2.2%; height: 4.45%; }
+    nav.tools { bottom: 6.65%; height: 5.0%; }
+    nav.tools button { border-color: #3d6175; background: linear-gradient(180deg, #2c4a5d, #20394b); color: #dcfbef; box-shadow: 0 2px #08162280; }
+    nav.tools button:not(:disabled):hover { background: #34566b; }
+    .primary, .primary:not(:disabled):hover { border-color: #9aeacc; background: #a3ead0; color: #11392f; box-shadow: 0 2px #1c5144; }
+    .primary:not(:disabled):hover { background: #bcf2dd; }
+    .result { position: absolute; z-index: 2; inset: 35% 10% auto; padding: 6.3cqw 5cqw 5cqw; border-radius: 4cqw; border: 1px solid #88c9bc; background: linear-gradient(160deg,#21384b,#122337); text-align: center; box-shadow: 0 13px 55px #07111bb0; }
+    .result[data-outcome="lost"] { border-color: #c48365; }
+    .result h2, dialog h2 { margin: 0; color: #f4f9fc; font-size: clamp(23px, 6.9cqw, 37px); line-height: 1.12; letter-spacing: -.045em; }
+    .result p { margin: 2.6cqw 0; color: #c0d3e0; font-size: clamp(12px, 3.5cqw, 17px); }
+    .result .sticker, .eyebrow { color: #a6efd5; font-size: clamp(10px, 2.55cqw, 12px); letter-spacing: .16em; font-weight: 850; }
+    .result .primary, .wide { min-height: 9.1cqw; width: 100%; margin-top: 2.7cqw; }
+    dialog { width: min(89cqw, 490px); max-height: min(88svh, 155cqw); overflow: auto; overscroll-behavior: contain; border: 1px solid #547288; border-radius: 4cqw; padding: 5.4cqw; background: #182b3d; color: #f4f9fc; box-shadow: 0 18px 80px #080f18a0; }
+    dialog::backdrop { background: #070f1ac7; backdrop-filter: blur(4px); }
+    dialog header { display: flex; gap: 3cqw; justify-content: space-between; align-items: flex-start; }
+    dialog header button { min-width: 9cqw; min-height: 8cqw; }
+    dialog .eyebrow { display: block; margin-bottom: 1.9cqw; }
+    .intro { color: #bdcfdf; font-size: clamp(12px, 3.35cqw, 16px); line-height: 1.55; }
+    .stages { display: grid; grid-template-columns: 1fr 1fr; gap: 2.6cqw; }
+    .stage { min-width: 0; min-height: 14cqw; display: grid; gap: 1.2cqw; justify-items: start; align-content: center; padding: 2cqw 2.7cqw; text-align: left; text-wrap: wrap; }
+    .stage[aria-current="true"] { border-color: #a7ecd6; background: #234b50; }
+    .stage span { color: #a6efd5; font-size: clamp(9px, 2.35cqw, 12px); letter-spacing: .08em; }
+    .stage strong { line-height: 1.2; }
+    .steps { display: grid; gap: 2.3cqw; padding: 0; list-style: none; counter-reset: step; }
+    .steps li { color: #bbcfdf; font-size: clamp(12px, 3.5cqw, 16px); line-height: 1.45; padding: 2.2cqw 2.8cqw; border-radius: 2.5cqw; background: #24394d; counter-increment: step; }
+    .steps li::before { content: "0" counter(step) " / "; color: #a6efd5; font-weight: 850; }
+    .steps strong { color: #f4f9fc; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } dialog::backdrop { backdrop-filter: none; } }
+    nav .primary, nav .primary:not(:disabled):hover { background: var(--theme-accent, #a3ead0); border-color: var(--theme-accent, #a3ead0); color: #242027; }
+    .map-toolbar, .shop-tabs { display: flex; gap: 2cqw; margin: 2.8cqw 0; }
+    .map-toolbar button, .shop-tabs button, select { min-height: 8.5cqw; padding: 0 2.8cqw; }
+    .shop-tabs button { flex: 1; }
+    .shop-tabs button[aria-pressed="true"], #shop-body button[aria-pressed="true"] { background: #26504c; border-color: #a9efcf; }
+    select { max-width: 100%; flex: 1; min-width: 0; color: #f4f8fb; border: 1px solid #547288; background: #253649; border-radius: 2cqw; font: inherit; font-size: clamp(11px, 3cqw, 15px); }
+    .shop-stats { color: #ffdc96; font-weight: 800; }
+    .storefront { position: relative; aspect-ratio: 1.85; overflow: hidden; isolation: isolate; border: 1px solid #60766d; border-radius: 3cqw; background: radial-gradient(ellipse at 50% 64%, #556859, #253b39 72%); }
+    .storefront::before { content: ""; position: absolute; inset: 16% 12% 13%; border: 2px solid #8c7360; border-bottom: 5px solid #49362d; border-radius: 3cqw 3cqw 0 0; background: linear-gradient(90deg,#654f3c 16%,#382e2d 16% 47%,#68523e 47% 53%,#382e2d 53% 81%,#654f3c 81%); }
+    .storefront::after { content: ""; position: absolute; inset: 85% 0 0; z-index: -1; background: repeating-linear-gradient(90deg,#58463c 0 11%,#46372e 11% 12%); }
+    .store-name { position: absolute; inset: 14% 26% auto; padding: 1.4% 0; text-align: center; color: #b1a589; background: #423737; border: 1px solid #74635d; border-radius: .8cqw; font-size: clamp(9px, 2.8cqw, 15px); font-weight: 900; letter-spacing: .1em; }
+    .storefront:has([data-node="sign"][data-built="true"]) .store-name { background: #584735; color: #ffe6a6; border-color: #e3bd7f; box-shadow: 0 0 17px #ffc77780; }
+    .fixture { position: absolute; transform: translate(-50%,-50%); color: #ffe8ad; visibility: hidden; font-weight: 900; font-size: clamp(16px, 6cqw, 32px); line-height: 1; text-shadow: 0 2px 0 #633b27, 0 0 11px #fec68b80; }
+    .fixture[data-built="true"] { visibility: visible; }
+    .fixture[data-node="sign"] { color: #ffdf94; left: 75% !important; }
+    .fixture[data-node="awning"] { width: 70%; height: 15%; color: transparent; background: repeating-linear-gradient(90deg,#efd9aa 0 10%,#b75b57 10% 20%); border-radius: 26% 26% 9% 9%; box-shadow: 0 4px 0 #2e242b; }
+    .fixture[data-node="counter"] { width: 51%; height: 16%; color: transparent; border: 2px solid #dc9e68; background: repeating-linear-gradient(90deg,#9e5c45 0 12%,#78402f 12% 13%); border-radius: 1cqw; }
+    .fixture[data-node="plants"] { color: #9de19f; }
+    .fixture[data-node="mat"] { color: #ebb0ad; }
+    .collection { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25cqw; }
+    .collection figure { margin: 0; text-align: center; padding: 1.8cqw .35cqw; border: 1px solid #466378; border-radius: 2cqw; background: #2a4355; }
+    .collection figure[data-found="false"] img { opacity: .28; filter: grayscale(1); }
+    .collection img { display: block; width: 75%; aspect-ratio: 1; margin: 0 auto 1cqw; }
+    .collection figcaption, .mini { font-size: clamp(9px, 2.5cqw, 13px); color: #c8dfdf; margin: 0; text-wrap: wrap; }
+    #shop-body h3 { font-size: clamp(12px, 3.6cqw, 18px); margin-bottom: 1.5cqw; }
+    .quick button { padding-inline: 1.4cqw; }
+    #shop { border-color: var(--theme-accent, #a3ead0); color: var(--theme-accent, #a3ead0); }
+  </style>
+</head>
+<body>
+  <main aria-label="万物打包师">
+    <canvas id="board" width="720" height="1280" tabindex="0" role="img" aria-describedby="keyboard-help" aria-label="滑块打包棋盘。使用鼠标或手指，把方块拖到顶边的发货口并继续往上推。">你的浏览器不支持 Canvas。</canvas>
+    <button id="hint" type="button" aria-label="提示下一步">提示</button>
+    <p id="keyboard-help" class="sr-only">键盘：按 E 或回车选择下一件货，Q 选择上一件，方向键移动，H 查看提示。</p>
+    <div class="quick" aria-label="试玩设置"><button id="levels" type="button">关卡</button><button id="shop" type="button" aria-label="梦想小店与图鉴">小店</button><button id="help" type="button" aria-label="玩法说明">帮助</button><button id="sound" type="button" aria-pressed="true">声音</button></div>
+    <p id="status" class="sr-only" role="status">正在加载关卡。</p>
+    <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button></section>
+    <nav class="tools" aria-label="救场道具"><button id="magnet" type="button" title="吸走最多三件匹配货物">磁力</button><button id="shuffle" type="button" title="刷新订单并清理暂存">刷新</button><button id="expand" type="button" title="把暂存扩至四格">扩容</button></nav>
+    <nav aria-label="关卡控制"><button id="prev" type="button">← 上一关</button><button id="retry" type="button">重玩</button><button class="primary" id="next" type="button">下一关 →</button></nav>
+    <dialog id="stage-dialog" aria-labelledby="stage-title"><header><div><span class="eyebrow">SHIFT SELECT</span><h2 id="stage-title">关卡地图</h2></div><form method="dialog"><button type="submit" aria-label="关闭关卡地图">关闭</button></form></header><p class="intro" id="stage-summary"></p><div class="map-toolbar"><button id="map-prev" type="button" aria-label="关卡地图上一页">←</button><select id="stage-chapter" aria-label="选择章节"></select><button id="map-next" type="button" aria-label="关卡地图下一页">→</button></div><div class="stages" id="stage-list"></div><button id="map-resume" class="primary wide" type="button">继续进度 →</button></dialog>
+    <dialog id="shop-dialog" aria-labelledby="shop-title"><header><div><span class="eyebrow">AFTER HOURS</span><h2 id="shop-title">梦想小店</h2></div><form method="dialog"><button type="submit" aria-label="关闭梦想小店">关闭</button></form></header><div class="shop-tabs" id="shop-tabs" aria-label="小店栏目"></div><div id="shop-body"></div></dialog>
+    <dialog id="help-dialog" aria-labelledby="help-title"><header><div><span class="eyebrow">PACKING MANUAL</span><h2 id="help-title">如何打包</h2></div><form method="dialog"><button type="submit" aria-label="关闭玩法说明">关闭</button></form></header><ol class="steps"><li><strong>滑到出口：</strong>拖动方块对齐绿色发货口，再继续向上推。</li><li><strong>按色装箱：</strong>传送带接收匹配颜色；暂时没订单时会进入缓冲槽。</li><li><strong>腾出空间：</strong>暂存满时，先处理能直装的货物，或使用底部道具。</li></ol><p class="intro">货物与暂存都清空即过关。拿不准时可点棋盘下方的「提示」。打开帮助、地图或小店时，游戏会暂停。</p><p class="intro">键盘：聚焦棋盘后，按 Q / E 选货，方向键移动，H 查看提示。</p><form method="dialog"><button class="primary wide" type="submit">回到棋盘</button></form></dialog>
+  </main>
+  <script id="flow-config" type="application/json">{"themes":[{"id":"bbq","name":"深夜烟火烧烤摊","packageName":"锡纸打包盒","baseColor":"#2e2030","panel":"#492a3d","accent":"#ffd48d","box":"#d5dce1","edge":"#474452","sound":{"pitch":350,"cutoff":1550,"knock":158,"wave":"triangle"},"items":{"RED":{"name":"肉串","key":"skewer","path":"M5 27L27 5 M8 17l5-5 5 5-5 5z M16 9l5-5 5 5-5 5z"},"YELLOW":{"name":"烤玉米","key":"corn","path":"M9 24C4 17 12 4 21 4c9 0 9 9 4 15l-8 8c-3 3-6 1-8-3z M10 18l12-10 M13 23l12-11 M9 13l11 9 M13 8l11 9"},"GREEN":{"name":"烤青椒","key":"pepper","path":"M24 4c-4 0-6 2-6 6m5 0c6 6 0 14-15 17C3 28 3 25 7 23c7-4 6-14 12-14z"},"BLUE":{"name":"冰啤酒","key":"beer","path":"M12 3h8v8l4 5v11H8V16l4-5z M10 17h12v7H10z M12 7h8"},"PURPLE":{"name":"炭烤大虾","key":"shrimp","path":"M26 9C19-2 6 3 5 13c0 7 8 11 14 7l3-4-7-2-1-4 4-2 4 3 5-6 M9 8l5 4m-8 2 8 1m-6 4 9-2m2 3 6 6-1-7"}},"corner":12,"finish":"foil"},{"id":"cosmetics","name":"精致美妆台","packageName":"丝绒礼盒","baseColor":"#34243e","panel":"#503650","accent":"#f8badc","box":"#f0cfdf","edge":"#643957","sound":{"pitch":523,"cutoff":2840,"knock":290,"wave":"sine"},"items":{"RED":{"name":"口红","key":"lipstick","path":"M10 16h12v12H10z M12 16V6l7-3 1 2v11 M10 21h12"},"YELLOW":{"name":"香水瓶","key":"perfume","path":"M12 4h8v6h-8z M11 10h10l5 6v11H6V16z M11 17h10v5H11z"},"GREEN":{"name":"粉扑","key":"puff","path":"M5 16c0-7 5-10 11-10s11 3 11 10-5 10-11 10S5 23 5 16z M7 12l17 9 M9 10l17 8"},"BLUE":{"name":"眼影盘","key":"shadow","path":"M5 8h22v17H5z M8 12h6v9H8z M18 12h6v9h-6z"},"PURPLE":{"name":"指甲油","key":"polish","path":"M12 3h8v9h-8z M10 12h12l3 4v11H7V16z M11 18h10v5H11z"}},"corner":20,"finish":"velvet"},{"id":"grocery","name":"复古童年杂货铺","packageName":"牛皮纸袋","baseColor":"#302820","panel":"#53412d","accent":"#f9ce94","box":"#ecd1a5","edge":"#624524","sound":{"pitch":392,"cutoff":930,"knock":128,"wave":"triangle"},"items":{"RED":{"name":"奶糖","key":"candy","path":"M10 11h12v10H10z M10 12L4 7v18l6-5 M22 12l6-5v18l-6-5 M13 16h6"},"YELLOW":{"name":"铁皮青蛙","key":"frog","path":"M8 13a4 4 0 118-1 4 4 0 118 1l4 7-5 5H9l-5-5z M11 17h.1 M21 17h.1 M12 21c2 2 6 2 8 0"},"GREEN":{"name":"玻璃汽水","key":"soda","path":"M12 3h8v5l-2 3 5 6v11H9V17l5-6-2-3z M10 18h12m-12 5h12"},"BLUE":{"name":"复古磁带","key":"tape","path":"M4 8h24v16H4z M8 12h16v6H8z M11 15h.1 M21 15h.1 M11 24l2-4h6l2 4"},"PURPLE":{"name":"弹珠","key":"marbles","path":"M14 7a5 5 0 110 10 5 5 0 010-10z M8 17a5 5 0 110 10 5 5 0 010-10z M22 15a6 6 0 110 12 6 6 0 010-12z"}},"corner":7,"finish":"kraft"},{"id":"bento","name":"日式元气便当屋","packageName":"漆器便当盒","baseColor":"#1a3031","panel":"#294747","accent":"#a9efcf","box":"#e3bc9b","edge":"#682f28","sound":{"pitch":440,"cutoff":620,"knock":110,"wave":"sine"},"items":{"RED":{"name":"章鱼香肠","key":"octopus","path":"M10 19V9a6 6 0 0112 0v10 M10 17l-5 8 M14 17l-2 10 M18 17l2 10 M22 17l5 8 M13 11h.1 M19 11h.1"},"YELLOW":{"name":"玉子烧","key":"egg","path":"M5 12l14-6 8 5v12l-14 4-8-5z M5 12l8 5 14-6 M13 17v10 M8 20l5 3 14-5"},"GREEN":{"name":"毛豆串","key":"edamame","path":"M4 19c7-7 14-13 23-12 1 9-5 17-15 19z M11 19h1 M17 15h1 M22 11h1"},"BLUE":{"name":"三角饭团","key":"rice","path":"M16 4c2 0 12 15 12 19 0 3-5 4-12 4s-12-1-12-4S14 4 16 4z M12 27V17h8v10"},"PURPLE":{"name":"腌萝卜","key":"pickle","path":"M10 5l13 2 4 8-7 12-12-3-3-10z M8 12l14 9 M9 7l16 10 M7 17l12 8"}},"corner":8,"finish":"lacquer"}],"renovations":[{"id":"sign","name":"暖光招牌","symbol":"⋆","x":50,"y":15,"cost":1},{"id":"counter","name":"原木吧台","symbol":"▤","x":50,"y":65,"cost":1},{"id":"awning","name":"条纹遮阳棚","symbol":"▰","x":50,"y":32,"cost":1},{"id":"table","name":"靠窗餐桌","symbol":"◒","x":75,"y":70,"cost":1},{"id":"plants","name":"窗台盆栽","symbol":"✿","x":27,"y":53,"cost":1},{"id":"lights","name":"吊灯串","symbol":"✧","x":71,"y":47,"cost":1},{"id":"shelf","name":"货架","symbol":"▦","x":29,"y":73,"cost":1},{"id":"menu","name":"手写菜单","symbol":"☷","x":76,"y":55,"cost":1},{"id":"mat","name":"迎客地垫","symbol":"⬒","x":49,"y":85,"cost":1},{"id":"cat","name":"招财小猫","symbol":"♧","x":20,"y":85,"cost":1}],"generation":{"chapterSize":30,"modes":[{"title":"开门热身","size":6,"pieces":20,"maxDepth":5,"coverage":0.59},{"title":"顺流连单","size":6,"pieces":24,"maxDepth":5,"coverage":0.68},{"title":"错位分拣","size":7,"pieces":33,"maxDepth":6,"rail":true,"coverage":0.75},{"title":"高峰拼单","size":7,"pieces":39,"maxDepth":6,"rail":true,"mixed":true,"coverage":0.84},{"title":"满屏大丰收","size":7,"pieces":41,"maxDepth":6,"reward":true,"coverage":0.88}]},"palette":{"RED":{"label":"红","code":"R","fill":"#ef775e","ink":"#632b24"},"YELLOW":{"label":"黄","code":"Y","fill":"#f1c657","ink":"#694b16"},"BLUE":{"label":"蓝","code":"B","fill":"#84addc","ink":"#243e65"},"GREEN":{"label":"绿","code":"G","fill":"#9dcc9c","ink":"#2d543e"},"PURPLE":{"label":"紫","code":"P","fill":"#c0a2d7","ink":"#4e346b"}},"levels":[{"title":"初次发货","tip":"把方块移到亮色发货口，再往上推。","cols":6,"rows":6,"gates":[1,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":2},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":4,"y":4},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":1,"y":4},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":2,"y":3},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":5,"y":2},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":5},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":2},{"id":"BOX-02","color":"YELLOW","count":2},{"id":"BOX-03","color":"BLUE","count":2},{"id":"BOX-04","color":"GREEN","count":2}]},{"title":"腾出通道","tip":"长条不会旋转。紫色可以先放进暂存槽。","cols":6,"rows":6,"gates":[1,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":3},"shape":[[0,0],[0,1]]},{"id":"r2","color":"RED","origin":{"x":4,"y":2},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":1,"y":1},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":3,"y":4},"shape":[[0,0],[0,1]]},{"id":"b1","color":"BLUE","origin":{"x":3,"y":1},"shape":[[0,0],[1,0]]},{"id":"b2","color":"BLUE","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":2},"shape":[[0,0],[0,1]]},{"id":"g2","color":"GREEN","origin":{"x":4,"y":5},"shape":[[0,0],[1,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":5},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":2,"y":3},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":2},{"id":"BOX-02","color":"YELLOW","count":2},{"id":"BOX-03","color":"BLUE","count":2},{"id":"BOX-04","color":"GREEN","count":2},{"id":"BOX-05","color":"PURPLE","count":2}]},{"title":"转个弯再出发","tip":"斜拖可以借空位拐弯。留意暂存区的 3 格上限。","cols":7,"rows":7,"gates":[1,3,5],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":2},"shape":[[0,0],[0,1],[1,1]]},{"id":"r2","color":"RED","origin":{"x":5,"y":1},"shape":[[0,0]]},{"id":"r3","color":"RED","origin":{"x":2,"y":5},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":3,"y":1},"shape":[[0,0],[1,0]]},{"id":"y2","color":"YELLOW","origin":{"x":4,"y":4},"shape":[[0,0]]},{"id":"y3","color":"YELLOW","origin":{"x":5,"y":5},"shape":[[0,0],[0,1]]},{"id":"b1","color":"BLUE","origin":{"x":0,"y":1},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":3},"shape":[[0,0],[1,0],[0,1]]},{"id":"b3","color":"BLUE","origin":{"x":6,"y":3},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":1,"y":5},"shape":[[0,0],[0,1]]},{"id":"g2","color":"GREEN","origin":{"x":5,"y":3},"shape":[[0,0]]},{"id":"g3","color":"GREEN","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":0},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":4,"y":2},"shape":[[0,0]]},{"id":"p3","color":"PURPLE","origin":{"x":6,"y":0},"shape":[[0,0]]},{"id":"p4","color":"PURPLE","origin":{"x":0,"y":6},"shape":[[0,0]]}],"orders":[{"id":"BOX-01","color":"RED","count":3},{"id":"BOX-02","color":"YELLOW","count":3},{"id":"BOX-03","color":"BLUE","count":3},{"id":"BOX-04","color":"GREEN","count":3},{"id":"BOX-05","color":"PURPLE","count":2},{"id":"BOX-06","color":"PURPLE","count":2}]},{"title":"拆膜拼单","tip":"发走相邻货物，拆掉冰冻；双色订单按色装箱。","cols":6,"rows":6,"gates":[1,2,4],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]],"lockCount":2},{"id":"r2","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":2,"y":0},"shape":[[0,0],[0,1]]},{"id":"y2","color":"YELLOW","origin":{"x":4,"y":3},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":4,"y":0},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":4},"shape":[[0,0]]}],"orders":[{"id":"MIX-01","color":"RED","count":2,"colors":["RED","YELLOW"]},{"id":"RED-01","color":"RED","count":1,"colors":["RED"]},{"id":"MIX-02","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"BLUE-01","color":"BLUE","count":2,"colors":["BLUE","BLUE"]}]},{"title":"单向开箱","tip":"箭头格只能顺箭头滑；清空盲盒周围一圈。","cols":6,"rows":6,"gates":[1,4],"rails":[{"x":1,"y":2,"dir":"UP"},{"x":1,"y":3,"dir":"UP"}],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":5,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":5},"shape":[[0,0]]},{"id":"y2","color":"YELLOW","origin":{"x":0,"y":3},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":4},"shape":[[0,0]]},{"id":"b2","color":"BLUE","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":0,"y":5},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":3},"shape":[[0,0]]},{"id":"m1","color":"PURPLE","origin":{"x":3,"y":3},"shape":[[0,0],[1,0],[0,1],[1,1]],"isMysteryBox":true,"drops":["YELLOW","PURPLE"]}],"orders":[{"id":"BLUE-01","color":"BLUE","count":2,"colors":["BLUE","BLUE"]},{"id":"RED-01","color":"RED","count":2,"colors":["RED","RED"]},{"id":"YELLOW-01","color":"YELLOW","count":2,"colors":["YELLOW","YELLOW"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]}]},{"title":"闪送急单","tip":"15 秒内装满 VIP 触发吸货，超时仍可正常装箱。","cols":7,"rows":7,"gates":[1,3,5],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":3},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":3,"y":4},"shape":[[0,0],[1,0]]},{"id":"b3","color":"BLUE","origin":{"x":5,"y":2},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":3,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":5,"y":4},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":2},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":6,"y":3},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":6},"shape":[[0,0]]}],"orders":[{"id":"VIP-01","color":"RED","count":1,"colors":["RED"],"vipSeconds":15},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-02","color":"RED","count":2,"colors":["RED","GREEN"]}]},{"title":"冷库补货","tip":"先拆掉出口旁的冰冻，再清空盲盒周围。","cols":7,"rows":7,"gates":[1,3,5],"rails":[{"x":1,"y":1,"dir":"UP"},{"x":1,"y":2,"dir":"UP"},{"x":1,"y":3,"dir":"UP"}],"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"y1","color":"YELLOW","origin":{"x":2,"y":1},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":1,"y":1},"shape":[[0,0]],"lockCount":2},{"id":"b1","color":"BLUE","origin":{"x":1,"y":4},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":6,"y":4},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":4,"y":3},"shape":[[0,0]]},{"id":"p1","color":"PURPLE","origin":{"x":3,"y":5},"shape":[[0,0]]},{"id":"m1","color":"PURPLE","origin":{"x":4,"y":4},"shape":[[0,0],[1,0],[0,1],[1,1]],"isMysteryBox":true,"drops":["BLUE","PURPLE"]}],"orders":[{"id":"RED-01","color":"RED","count":2,"colors":["RED","RED"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]}]},{"title":"截单前夜","tip":"限时 75 秒。先发 VIP，再把货物分流到四个出口。","cols":8,"rows":8,"gates":[1,3,4,6],"timeLimit":75,"items":[{"id":"r1","color":"RED","origin":{"x":1,"y":0},"shape":[[0,0]]},{"id":"b1","color":"BLUE","origin":{"x":1,"y":2},"shape":[[0,0],[0,1]]},{"id":"b2","color":"BLUE","origin":{"x":0,"y":6},"shape":[[0,0],[0,1],[1,1]]},{"id":"b3","color":"BLUE","origin":{"x":5,"y":4},"shape":[[0,0],[1,0]]},{"id":"y1","color":"YELLOW","origin":{"x":4,"y":1},"shape":[[0,0]]},{"id":"g1","color":"GREEN","origin":{"x":6,"y":0},"shape":[[0,0]]},{"id":"r2","color":"RED","origin":{"x":3,"y":3},"shape":[[0,0],[1,0]]},{"id":"g2","color":"GREEN","origin":{"x":3,"y":6},"shape":[[0,0],[0,1]]},{"id":"p1","color":"PURPLE","origin":{"x":2,"y":4},"shape":[[0,0]]},{"id":"p2","color":"PURPLE","origin":{"x":6,"y":6},"shape":[[0,0],[0,1],[1,1]]},{"id":"y2","color":"YELLOW","origin":{"x":6,"y":2},"shape":[[0,0],[0,1]]},{"id":"r3","color":"RED","origin":{"x":0,"y":4},"shape":[[0,0]]},{"id":"b4","color":"BLUE","origin":{"x":4,"y":6},"shape":[[0,0]]}],"orders":[{"id":"VIP-01","color":"RED","count":1,"colors":["RED"],"vipSeconds":12},{"id":"BLUE-01","color":"BLUE","count":3,"colors":["BLUE","BLUE","BLUE"]},{"id":"MIX-01","color":"YELLOW","count":2,"colors":["YELLOW","GREEN"]},{"id":"MIX-02","color":"RED","count":2,"colors":["RED","GREEN"]},{"id":"PURPLE-01","color":"PURPLE","count":2,"colors":["PURPLE","PURPLE"]},{"id":"MIX-03","color":"YELLOW","count":3,"colors":["YELLOW","RED","BLUE"]}]}]}</script>
+  <script type="module">export const COLORS = ['RED', 'YELLOW', 'GREEN', 'BLUE', 'PURPLE']         ;
+                                          
+                                    
+                                             
+                                                                                                                                                                                
+                                                                                                       
+                                                                     
+                                                                                                                                                                                        
+                                                                                                                                           
+                                                             
+                                                                                                     
+                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                           
+
+export const BELT_WIDTH = 720;
+export const BUFFER_SIZE = 3;
+const BOX_GAP = 177;
+const BOX_EDGE = 72;
+const BELT_SPEED = 76;
+const SEALED_SPEED = 430;
+const JAM_LIMIT = 2;
+const COMBO_LIMIT = 2.6;
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]]         ;
+
+export const orderColors = (order       )          => order.colors ?? Array       (order.count).fill(order.color);
+export function boxNeeds(box     )          {
+  const need = [...orderColors(box)];
+  for (const color of box.filledColors) {
+    const index = need.indexOf(color);
+    if (index >= 0) need.splice(index, 1);
+  }
+  return need;
+}
+const makeBox = (order       , x        )      => ({ ...order, x, count: orderColors(order).length, filled: 0, filledColors: [], sealed: false, vipRemaining: order.vipSeconds ?? 0, vipStarted: false });
+export const cells = (item      , origin = item.origin)         => item.shape.map(([dx, dy]) => [origin.x + dx, origin.y + dy]);
+export const itemAt = (game      , x        , y        ) => game.items.find(item => cells(item).some(([col, row]) => col === x && row === y));
+export const visible = (box     ) => box.x >= 0 && box.x <= BELT_WIDTH;
+export const movable = (item      ) => !item.isMysteryBox && !(item.lockCount && item.lockCount > 0);
+
+function surfaceColors(game      )          {
+  const grid = game.level;
+  return [...game.items].filter(movable).map(item => {
+    const access = cells(item).map(([col, row]) => {
+      const gateDistance = Math.min(...grid.gates.map(gate => Math.abs(gate - col)));
+      let blockers = 0;
+      for (let above = 0; above < row; above++) {
+        const obstacle = itemAt(game, col, above);
+        if (obstacle && obstacle !== item) blockers++;
+      }
+      return row + gateDistance * 2 + blockers * grid.rows;
+    });
+    return { color: item.color, score: Math.min(...access) };
+  }).sort((first, second) => first.score - second.score).map(entry => entry.color);
+}
+
+export function prioritizeOrders(orders         , colors         , count        )          {
+  const pending = [...orders];
+  const chosen          = [];
+  const priorities = [...colors];
+  while (pending.length && chosen.length < count && priorities.length) {
+    const color = priorities.shift() ;
+    const index = pending.findIndex(order => orderColors(order).includes(color));
+    if (index < 0) continue;
+    const [order] = pending.splice(index, 1);
+    chosen.push(order);
+    const remaining = [...orderColors(order)];
+    remaining.splice(remaining.indexOf(color), 1);
+    for (const needed of remaining) {
+      const match = priorities.indexOf(needed);
+      if (match >= 0) priorities.splice(match, 1);
+    }
+  }
+  return [...chosen, ...pending];
+}
+
+export function createGame(level       , failures = 0)       {
+  const game       = { level, items: level.items.map(item => ({ ...item, origin: { ...item.origin } })), slots: Array             (BUFFER_SIZE).fill(null),
+    boxes: [], queue: [], status: 'playing', combo: 0, comboTime: 0, jamTime: 0, remaining: level.timeLimit ?? null,
+    total: level.items.reduce((sum, item) => sum + (item.isMysteryBox ? 2 : 1), 0), packed: 0, events: [], tools: { MAGNET: 1, SHUFFLE_BELT: 1, EXPAND_SLOT: 1 } };
+  const orders = failures >= 2 ? prioritizeOrders(level.orders, surfaceColors(game), 3) : level.orders;
+  game.boxes = orders.slice(0, 4).map((order, index) => makeBox(order, 94 + index * BOX_GAP));
+  game.queue = orders.slice(4);
+  return game;
+}
+
+function emptyAt(game      , item      , origin       )          {
+  return cells(item, origin).every(([col, row]) => {
+    if (col < 0 || row < 0 || col >= game.level.cols || row >= game.level.rows) return false;
+    const occupant = itemAt(game, col, row);
+    return !occupant || occupant === item;
+  });
+}
+
+export function canMove(game      , item      , dx        , dy        )          {
+  if (!movable(item) || Math.abs(dx) + Math.abs(dy) !== 1) return false;
+  if ((dx && item.moveAxis === 'V') || (dy && item.moveAxis === 'H')) return false;
+  const target = { x: item.origin.x + dx, y: item.origin.y + dy };
+  const direction = dx > 0 ? 'RIGHT' : dx < 0 ? 'LEFT' : dy < 0 ? 'UP' : 'DOWN';
+  const crossed = [...cells(item), ...cells(item, target)];
+  if (game.level.rails?.some(tile => tile.dir !== direction && crossed.some(([col, row]) => col === tile.x && row === tile.y))) return false;
+  return emptyAt(game, item, target);
+}
+
+function canShip(game      , item      )          {
+  if (!movable(item) || item.moveAxis === 'H') return false;
+  const occupied = cells(item);
+  if (game.level.rails?.some(tile => tile.dir !== 'UP' && occupied.some(([col, row]) => col === tile.x && row === tile.y))) return false;
+  return occupied.some(([col, row]) => row === 0 && game.level.gates.includes(col));
+}
+
+                                                                                               
+
+export function findHint(game      )              {
+  if (game.status !== 'playing') return null;
+  const board = { ...game, items: game.items.map(item => ({ ...item })) };
+  const directions         = [[0, -1], [-1, 0], [1, 0], [0, 1]];
+  let best                                           ;
+  for (const item of board.items) {
+    if (!movable(item) || item.moveAxis === 'H') continue;
+    const ready = Boolean(matchingBox(board, item.color));
+    if (best?.hint.ready && !ready) continue;
+    const origin = item.origin;
+    const queue                                                = [{ at: origin, steps: 0 }];
+    const seen = new Set([origin.x + ':' + origin.y]);
+    for (const entry of queue) {
+      item.origin = entry.at;
+      if (canShip(board, item)) {
+        const hint       = { itemId: item.id, target: entry.first ?? { x: origin.x, y: origin.y - 1 }, action: entry.first ? 'slide' : 'ship', ready };
+        if (!best || (ready && !best.hint.ready) || (ready === best.hint.ready && entry.steps < best.steps)) best = { hint, steps: entry.steps };
+        break;
+      }
+      for (const [dx, dy] of directions) {
+        const at = { x: entry.at.x + dx, y: entry.at.y + dy };
+        const key = at.x + ':' + at.y;
+        if (seen.has(key) || !canMove(board, item, dx, dy)) continue;
+        seen.add(key);
+        queue.push({ at, first: entry.first ?? at, steps: entry.steps + 1 });
+      }
+    }
+    item.origin = origin;
+  }
+  return best?.hint ?? null;
+}
+
+function matchingBox(game      , color       )                  {
+  return game.boxes.filter(box => !box.sealed && visible(box) && boxNeeds(box).includes(color)).sort((left, right) => left.x - right.x)[0];
+}
+
+function leftEntry(game      )         {
+  return Math.min(-BOX_EDGE, ...game.boxes.filter(box => !box.sealed).map(box => box.x - BOX_GAP));
+}
+
+function afterDeparture(game      , departing      )       {
+  const occupied = cells(departing);
+  for (const neighbor of game.items) {
+    if (!neighbor.lockCount || !cells(neighbor).some(([col, row]) => occupied.some(([oldCol, oldRow]) => Math.abs(col - oldCol) + Math.abs(row - oldRow) === 1))) continue;
+    neighbor.lockCount--;
+    if (neighbor.lockCount === 0) game.events.push({ kind: 'unlock', point: { ...neighbor.origin } });
+  }
+}
+
+function crackMysteries(game      )       {
+  for (const crate of [...game.items]) {
+    if (!crate.isMysteryBox) continue;
+    const crateCells = cells(crate);
+    if (game.items.some(item => item !== crate && cells(item).some(([x, y]) => crateCells.some(([col, row]) => Math.abs(x - col) <= 1 && Math.abs(y - row) <= 1)))) continue;
+    const live = game.boxes.filter(box => !box.sealed).sort((left, right) => Number(visible(right)) - Number(visible(left)) || left.x - right.x);
+    const deficit = new Map               ();
+    const demand = [...live.flatMap(boxNeeds), ...game.queue.flatMap(orderColors)];
+    for (const color of demand) deficit.set(color, (deficit.get(color) ?? 0) + 1);
+    for (const item of [...game.items, ...game.slots]) if (item && !item.isMysteryBox) deficit.set(item.color, (deficit.get(item.color) ?? 0) - 1);
+    const drops          = [];
+    for (const color of demand) {
+      if ((deficit.get(color) ?? 0) <= 0) continue;
+      drops.push(color);
+      deficit.set(color, deficit.get(color)  - 1);
+      if (drops.length === 2) break;
+    }
+    if (drops.length !== 2 && !crate.drops) continue;
+    const colors = drops.length === 2 ? drops : crate.drops ;
+    game.items = game.items.filter(item => item !== crate);
+    for (const [index, color] of colors.entries()) {
+      const [x, y] = crateCells[index === 0 ? 0 : crateCells.length - 1];
+      game.items.push({ id: crate.id + '-' + (index + 1), color, origin: { x, y }, shape: [[0, 0]] });
+    }
+    game.events.push({ kind: 'open', point: { ...crate.origin } });
+  }
+}
+
+function magnet(game      )         {
+  const demand = new Map               ();
+  for (const box of game.boxes.filter(box => !box.sealed && visible(box)).sort((left, right) => left.x - right.x)) {
+    for (const color of boxNeeds(box)) demand.set(color, (demand.get(color) ?? 0) + 1);
+  }
+  const target = [...demand].sort((left, right) => right[1] - left[1]).find(([color]) => game.items.some(item => !item.isMysteryBox && item.color === color))?.[0];
+  if (!target) return 0;
+  let collected = 0;
+  for (const item of [...game.items]) {
+    if (collected === 3) break;
+    if (item.isMysteryBox || item.color !== target || !game.items.includes(item)) continue;
+    const box = matchingBox(game, target);
+    if (!box) break;
+    game.items = game.items.filter(candidate => candidate !== item);
+    afterDeparture(game, item);
+    fillBox(game, box, item);
+    crackMysteries(game);
+    collected++;
+  }
+  return collected;
+}
+
+function fillBox(game      , box     , item      , fromSlot         )       {
+  box.filledColors.push(item.color);
+  box.filled = box.filledColors.length;
+  game.packed++;
+  game.combo++;
+  game.comboTime = COMBO_LIMIT;
+  game.events.push({ kind: 'ship', item, fromSlot, to: { kind: 'box', id: box.id, x: box.x }, combo: game.combo });
+  if (box.filled !== box.count) return;
+  const vip = box.vipRemaining > 0 && visible(box);
+  box.sealed = true;
+  game.events.push({ kind: 'seal', x: box.x, color: box.color, vip });
+  const next = game.queue.shift();
+  if (next) game.boxes.push(makeBox(next, leftEntry(game)));
+  if (vip) magnet(game);
+}
+
+function updateWin(game      )          {
+  if (game.items.length || game.slots.some(slot => slot !== null)) return false;
+  game.status = 'won';
+  return true;
+}
+
+export function ship(game      , id        )                                                    {
+  const item = game.items.find(candidate => candidate.id === id);
+  if (game.status !== 'playing' || !item || !canShip(game, item)) return 'unavailable';
+  const box = matchingBox(game, item.color);
+  const free = game.slots.indexOf(null);
+  if (!box && free < 0) {
+    game.events.push({ kind: 'reject' });
+    return 'blocked';
+  }
+  game.items = game.items.filter(candidate => candidate !== item);
+  game.jamTime = 0;
+  afterDeparture(game, item);
+  if (box) fillBox(game, box, item);
+  else {
+    game.slots[free] = item;
+    game.events.push({ kind: 'ship', item, to: { kind: 'buffer', index: free } });
+  }
+  crackMysteries(game);
+  updateWin(game);
+  return box ? 'packed' : 'buffered';
+}
+
+                                                                             
+export function dragToward(game      , id        , target       )             {
+  const item = game.items.find(candidate => candidate.id === id);
+  if (!item || !movable(item) || game.status !== 'playing' || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return 'idle';
+  let result             = 'idle';
+  for (let step = 0; step < game.level.cols + game.level.rows + 2; step++) {
+    const dx = target.x - item.origin.x;
+    const dy = target.y - item.origin.y;
+    const axes = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y']          : ['y', 'x']         ;
+    let advanced = false;
+    for (const axis of axes) {
+      const delta = axis === 'x' ? dx : dy;
+      if (Math.abs(delta) < 0.56) continue;
+      const sign = Math.sign(delta);
+      if (axis === 'y' && sign === -1 && canShip(game, item)) {
+        const shipped = ship(game, id);
+        if (shipped !== 'unavailable') return shipped;
+      }
+      const stepX = axis === 'x' ? sign : 0;
+      const stepY = axis === 'y' ? sign : 0;
+      if (!canMove(game, item, stepX, stepY)) continue;
+      item.origin.x += stepX;
+      item.origin.y += stepY;
+      crackMysteries(game);
+      result = 'slid';
+      advanced = true;
+      break;
+    }
+    if (!advanced) break;
+  }
+  return result;
+}
+
+function creditOrder(game      , item      , slot        )          {
+  const box = game.boxes.find(candidate => !candidate.sealed && boxNeeds(candidate).includes(item.color));
+  if (box) {
+    fillBox(game, box, item, slot);
+    return true;
+  }
+  const index = game.queue.findIndex(order => orderColors(order).includes(item.color));
+  if (index < 0) return false;
+  const order = game.queue[index];
+  const need = [...orderColors(order)];
+  need.splice(need.indexOf(item.color), 1);
+  if (need.length) game.queue[index] = { ...order, color: need[0], colors: need, count: need.length };
+  else game.queue.splice(index, 1);
+  game.packed++;
+  return true;
+}
+
+function shuffle(game      , random              )       {
+  for (const [index, item] of game.slots.entries()) {
+    if (!item) continue;
+    const free          = [];
+    for (let y = 0; y < game.level.rows; y++) {
+      for (let x = 0; x < game.level.cols; x++) if (emptyAt(game, item, { x, y })) free.push({ x, y });
+    }
+    game.slots[index] = null;
+    if (free.length) {
+      item.origin = free[Math.min(free.length - 1, Math.max(0, Math.floor(random() * free.length)))];
+      game.items.push(item);
+    } else if (!creditOrder(game, item, index)) game.slots[index] = item;
+  }
+  const targets = game.boxes.filter(box => !box.sealed && box.filled === 0 && !box.vipStarted).sort((left, right) => left.x - right.x);
+  const available = [...targets.map(({ id, color, count, colors, vipSeconds }) => ({ id, color, count, colors, vipSeconds })), ...game.queue];
+  const prioritized = prioritizeOrders(available, surfaceColors(game), targets.length);
+  for (const [index, box] of targets.entries()) {
+    game.boxes[game.boxes.indexOf(box)] = makeBox(prioritized[index], box.x);
+  }
+  game.queue = prioritized.slice(targets.length);
+  crackMysteries(game);
+}
+
+export function useTool(game      , tool      , random = Math.random)          {
+  if (game.status !== 'playing' || !game.tools[tool]) return false;
+  if (tool === 'MAGNET' && !magnet(game)) return false;
+  if (tool === 'SHUFFLE_BELT') shuffle(game, random);
+  if (tool === 'EXPAND_SLOT') game.slots.push(null);
+  game.tools[tool]--;
+  game.jamTime = 0;
+  updateWin(game);
+  return true;
+}
+
+function isJammed(game      )          {
+  if (game.slots.some(slot => slot === null)) return false;
+  const cycling = new Set(game.boxes.filter(box => !box.sealed).flatMap(boxNeeds));
+  if (game.slots.some(slot => slot && cycling.has(slot.color))) return false;
+  if (!game.items.some(item => cycling.has(item.color) || item.isMysteryBox)) return true;
+  return !game.items.some(item => (cycling.has(item.color) && canShip(game, item)) || SIDES.some(([dx, dy]) => canMove(game, item, dx, dy)));
+}
+
+export function tick(game      , seconds        )       {
+  if (!Number.isFinite(seconds) || seconds <= 0) return;
+  const duration = Math.min(seconds, 0.1);
+  for (const box of game.boxes) box.x += (box.sealed ? SEALED_SPEED : (game.level.beltSpeed ?? BELT_SPEED)) * duration;
+  game.boxes = game.boxes.filter(box => !box.sealed || box.x < BELT_WIDTH + BOX_EDGE);
+  for (const box of game.boxes) {
+    if (!box.sealed && box.x > BELT_WIDTH + BOX_EDGE) box.x = leftEntry(game);
+  }
+  if (game.status !== 'playing') return;
+  for (const box of game.boxes) {
+    if (box.sealed || box.vipRemaining <= 0) continue;
+    if (visible(box)) box.vipStarted = true;
+    if (box.vipStarted) box.vipRemaining = Math.max(0, box.vipRemaining - duration);
+  }
+  game.comboTime = Math.max(0, game.comboTime - duration);
+  if (!game.comboTime) game.combo = 0;
+  for (const [index, item] of game.slots.entries()) {
+    if (!item) continue;
+    const box = matchingBox(game, item.color);
+    if (!box) continue;
+    game.slots[index] = null;
+    fillBox(game, box, item, index);
+  }
+  if (updateWin(game)) return;
+  if (game.remaining !== null) game.remaining = Math.max(0, game.remaining - duration);
+  game.jamTime = isJammed(game) ? game.jamTime + duration : 0;
+  if (game.remaining === 0 || game.jamTime >= JAM_LIMIT) game.status = 'lost';
+}
+
+                                                                                                       
+
+export function createSound(profile                                                                              ) {
+  let enabled = true;
+  try { enabled = localStorage.getItem('pack-flow.sound') !== 'off'; } catch {}
+  let context                          ;
+  let bus                      ;
+  let texture                         ;
+  let lastMotion = -1;
+
+  function activate() {
+    if (!enabled || typeof AudioContext === 'undefined') return;
+    try {
+      if (!context) {
+        context = new AudioContext();
+        bus = context.createGain();
+        bus.gain.value = 0.35;
+        bus.connect(context.destination);
+        texture = context.createBuffer(1, Math.round(context.sampleRate * 0.14), context.sampleRate);
+        const samples = texture.getChannelData(0);
+        for (let index = 0; index < samples.length; index++) samples[index] = Math.random() * 2 - 1;
+      }
+      if (context.state === 'suspended') void context.resume().catch(() => {});
+    } catch {}
+  }
+
+  function note(start        , from        , to        , duration        , volume        , wave                 = 'sine') {
+    if (!context || !bus) return;
+    const oscillator = context.createOscillator();
+    const envelope = context.createGain();
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(from, start);
+    oscillator.frequency.exponentialRampToValueAtTime(to, start + duration);
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.exponentialRampToValueAtTime(volume, start + 0.009);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(envelope).connect(bus);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.015);
+  }
+
+  function noise(start        , duration        , volume        , cutoff        ) {
+    if (!context || !bus || !texture) return;
+    const sample = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const envelope = context.createGain();
+    sample.buffer = texture;
+    filter.type = 'lowpass';
+    filter.frequency.value = cutoff;
+    envelope.gain.setValueAtTime(volume, start);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    sample.connect(filter).connect(envelope).connect(bus);
+    sample.start(start);
+    sample.stop(start + duration);
+  }
+
+  function play(cue          , combo = 1) {
+    if (!enabled || !context || context.state !== 'running' || document.hidden) return;
+    const start = context.currentTime + 0.006;
+    const { pitch: root, cutoff, knock, wave } = profile();
+    const pitch = root * 2 ** (Math.min(11, Math.max(0, combo - 1)) / 12);
+    switch (cue) {
+      case 'move':
+        if (start - lastMotion < 0.085) return;
+        lastMotion = start;
+        noise(start, 0.055, 0.085, cutoff * 0.65);
+        note(start, 144, 83, 0.035, 0.03, 'triangle');
+        break;
+      case 'send':
+        note(start, 392, 587, 0.105, 0.13, 'triangle');
+        break;
+      case 'load':
+        note(start, pitch, pitch * 0.97, 0.15, 0.2, wave);
+        note(start + 0.04, pitch * 1.5, pitch * 1.48, 0.12, 0.1);
+        break;
+      case 'seal':
+        noise(start, 0.1, 0.12, cutoff);
+        note(start, knock, knock * 0.45, 0.14, 0.19, wave);
+        note(start + 0.05, root * 2, root * 1.91, 0.21, 0.11, wave);
+        break;
+      case 'warning':
+        note(start, 232, 173, 0.14, 0.16, 'triangle');
+        note(start + 0.09, 182, 124, 0.15, 0.12, 'triangle');
+        break;
+      case 'open':
+        noise(start, 0.09, 0.145, 2160);
+        note(start + 0.05, 466, 624, 0.16, 0.13);
+        break;
+      case 'tool':
+        note(start, 294, 530, 0.18, 0.13, 'triangle');
+        break;
+      case 'vip':
+      case 'win':
+        (cue === 'vip' ? [523, 659, 784, 1046] : [440, 554, 659, 880, 1108]).forEach((frequency, index) => note(start + index * 0.08, frequency, frequency * 0.983, 0.27, 0.16, 'triangle'));
+        break;
+    }
+  }
+
+  function toggle() {
+    enabled = !enabled;
+    try { localStorage.setItem('pack-flow.sound', enabled ? 'on' : 'off'); } catch {}
+    if (context && bus) bus.gain.setTargetAtTime(enabled ? 0.35 : 0, context.currentTime, 0.021);
+    if (enabled) activate();
+    return enabled;
+  }
+
+  return { activate, play, toggle, get enabled() { return enabled; } };
+}
+
+
+                                                                                                                                                          
+                                           
+const reverseShapes           = [[[0, 0]], [[0, 0]], [[0, 0], [0, 1]], [[0, 0], [1, 0]], [[0, 0], [0, 1], [1, 1]]];
+const reverseSteps         = [[0, 1], [1, 0], [-1, 0], [0, -1]];
+
+function seeded(seed        ) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = Math.imul(state ^ state >>> 15, state | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function witnessWins(level       , routes         , failures        ) {
+  const game = createGame(level, failures);
+  for (const route of routes) {
+    const item = game.items.find(piece => piece.id === route.id);
+    if (!item) return false;
+    for (const target of route.path) {
+      if (dragToward(game, item.id, target) !== 'slid') return false;
+    }
+    const available = () => game.boxes.some(box => !box.sealed && visible(box) && boxNeeds(box).includes(item.color));
+    for (let frame = 0; !available() && frame < 360; frame++) tick(game, 0.1);
+    if (!available() || dragToward(game, item.id, { x: item.origin.x, y: item.origin.y - 0.75 }) !== 'packed') return false;
+    tick(game, 0.1);
+  }
+  return game.status === 'won';
+}
+
+export function generateStage(index        , modes        ) {
+  const mode = modes[index % modes.length];
+  const random = seeded((index + 971) ^ Math.imul(Math.floor(index / 4294967296), 2654435761));
+  const choose =        (values         ) => values[Math.floor(random() * values.length)];
+  const size = mode.size;
+  const gates = [1, Math.floor(size / 2), size - 2];
+  const level        = {
+    title: mode.title,
+    tip: mode.reward ? '奖励班次 · 同色大集结，传送带加速' : mode.mixed ? '高峰班次 · 沿箭头走，先发解冻件' : mode.rail ? '技巧班次 · 注意发货口前的单向标记' : '把货物对齐发货口，再继续向上推。',
+    cols: size, rows: size, gates, items: [], orders: [],
+    rails: mode.rail ? [{ x: gates[0], y: 0, dir: 'UP' }] : [],
+    beltSpeed: mode.reward ? 109 : undefined
+  };
+  const color = choose([...COLORS]);
+  const target = Math.round(mode.coverage * size * size);
+  const buildLayout = () => {
+    const board = createGame(level);
+    const routes          = [];
+    const shippingOrder         = [];
+    const place = (item      ) => {
+      const positions = new Map                                      ();
+      const queue                                 = [];
+      const vacant = (at       ) => cells(item, at).every(([x, y]) => x >= 0 && x < size && y >= 0 && y <= mode.maxDepth && !board.items.some(piece => piece !== item && cells(piece).some(([col, row]) => x === col && y === row)));
+      const key = (at       ) => at.x + ':' + at.y;
+      for (let col = 0; col < size; col++) {
+        const at = { x: col, y: 0 };
+        if (!vacant(at) || !cells(item, at).some(([x, y]) => y === 0 && gates.includes(x))) continue;
+        const entry = { at, path: [] };
+        positions.set(key(at), entry);
+        queue.push(entry);
+      }
+      board.items.push(item);
+      for (const entry of queue) {
+        for (const [dx, dy] of reverseSteps) {
+          const at = { x: entry.at.x + dx, y: entry.at.y + dy };
+          if (positions.has(key(at)) || !vacant(at)) continue;
+          item.origin = at;
+          if (!canMove(board, item, -dx, -dy)) continue;
+          const found = { at, path: [entry.at, ...entry.path] };
+          positions.set(key(at), found);
+          queue.push(found);
+        }
+      }
+      if (!queue.length) { board.items.pop(); return null; }
+      queue.sort((left, right) => right.at.y - left.at.y);
+      const floor = queue[0].at.y;
+      const entry = choose(queue.filter(candidate => candidate.at.y >= Math.max(0, floor - 1)));
+      item.origin = entry.at;
+      return { id: item.id, path: entry.path };
+    };
+
+    let occupied = 0;
+    for (let slot = 0; slot < mode.pieces && occupied < target; slot++) {
+      const shape = slot % 3 === 0 ? choose(reverseShapes) : reverseShapes[0];
+      const item       = { id: 'g' + (slot + 1), color, shape, origin: { x: 0, y: 0 } };
+      let route = place(item);
+      if (!route && shape.length > 1) { item.shape = reverseShapes[0]; route = place(item); }
+      if (!route) break;
+      occupied += item.shape.length;
+      shippingOrder.unshift(item);
+      routes.unshift(route);
+    }
+    return { occupied, shippingOrder, routes };
+  };
+  let best = buildLayout();
+  for (let attempt = 1; attempt < 8 && best.occupied < target; attempt++) {
+    const candidate = buildLayout();
+    if (candidate.occupied > best.occupied) best = candidate;
+  }
+  const { shippingOrder, routes } = best;
+
+  if (mode.mixed) {
+    const neighbors = (first        , second        ) => first.some(([col, row]) => second.some(([x, y]) => Math.abs(x - col) + Math.abs(y - row) === 1));
+    for (let slot = 1, locked = 0; slot < routes.length && locked < 3; slot++) {
+      const item = shippingOrder[slot];
+      const adjacent = shippingOrder.slice(0, slot).filter((former, earlier) => neighbors(cells(item), cells(former, routes[earlier].path.at(-1) ?? former.origin))).length;
+      if (adjacent && random() < 0.6) { item.lockCount = Math.min(adjacent, 2); locked++; }
+    }
+  }
+  level.items = shippingOrder;
+  const createOrders = (plain         ) => {
+    const orders          = [];
+    for (let offset = 0; offset < shippingOrder.length;) {
+      const count = Math.min(mode.reward ? 4 : 3, shippingOrder.length - offset);
+      const base = plain || mode.reward ? color : choose([...COLORS]);
+      const colors = Array       (count).fill(base);
+      if (mode.mixed && !plain && count > 1 && orders.length % 2 === 0) colors[1] = choose(COLORS.filter(candidate => candidate !== base));
+      colors.forEach((kind, delta) => { shippingOrder[offset + delta].color = kind; });
+      orders.push({ id: 'AUTO-' + orders.length, color: base, count, colors });
+      offset += count;
+    }
+    return orders;
+  };
+  const valid = () => witnessWins(level, routes, 0) && witnessWins(level, routes, 2);
+  level.orders = createOrders(false);
+  if (!valid()) {
+    level.orders = createOrders(true);
+    if (!valid()) throw Error('Invalid reverse path for stage ' + (index + 1));
+  }
+  return { level, routes };
+}
+
+
+                                                                                                                                                                                                                                                                                                                                                                      
+                                                                                                          
+                                                                                                                                       
+
+export function makeProgress(saved                    = {}, legacy           = [])           {
+  const cleared = [...new Set((Array.isArray(saved.cleared) ? saved.cleared : legacy).filter(index => Number.isSafeInteger(index) && index >= 0))];
+  const strings = (values         ) => Array.isArray(values) ? [...new Set(values.filter((value)                  => typeof value === 'string'))] : [];
+  const unlockedLevel = cleared.reduce((highest, stage) => Math.max(highest, stage + 1), 0);
+  return { unlockedLevel, cleared, stars: Number.isSafeInteger(saved.stars) ? Math.max(0, saved.stars ) : cleared.length, renovatedNodes: strings(saved.renovatedNodes), collectedItems: strings(saved.collectedItems) };
+}
+
+export function clearStage(progress          , index        ) {
+  if (progress.cleared.includes(index)) return false;
+  progress.cleared.push(index);
+  progress.unlockedLevel = Math.max(progress.unlockedLevel, index + 1);
+  progress.stars++;
+  return true;
+}
+
+export function collectCargo(progress          , theme       , color       ) {
+  const key = theme.id + ':' + theme.items[color].key;
+  if (progress.collectedItems.includes(key)) return false;
+  progress.collectedItems.push(key);
+  return true;
+}
+
+export function renovate(progress          , nodes              , id        ) {
+  const next = nodes.find(node => !progress.renovatedNodes.includes(node.id));
+  if (!next || next.id !== id || progress.stars < next.cost) return false;
+  progress.stars -= next.cost;
+  progress.renovatedNodes.push(next.id);
+  return true;
+}
+
+
+                                                                         
+                                                                                                                                                                   
+                                                                                             
+                                                                                                                                                         
+                                                                                      
+
+const catalog          = JSON.parse(document.getElementById('flow-config') .textContent );
+const canvas = document.querySelector                   ('#board') ;
+const ctx = canvas.getContext('2d') ;
+const previous = document.querySelector                   ('#prev') ;
+const retry = document.querySelector                   ('#retry') ;
+const next = document.querySelector                   ('#next') ;
+const statusText = document.getElementById('status') ;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const { chapterSize, modes } = catalog.generation;
+const storyLength = chapterSize * catalog.themes.length;
+const pageSize = 10;
+const campaignTheme = (index        ) => catalog.themes[Math.floor(index / chapterSize) % catalog.themes.length];
+const levelAt = (index        ) => catalog.levels[index] ?? generateStage(index, modes).level;
+let themeChoice = stored        ('pack-flow.theme', '');
+let theme = catalog.themes.find(candidate => candidate.id === themeChoice) ?? campaignTheme(0);
+const sound = createSound(() => theme.sound);
+const legacy = stored          ('pack-flow.cleared', []);
+const progress = makeProgress(stored                   ('pack-flow.progress', {}), Array.isArray(legacy) ? legacy : []);
+const shopDialog = document.querySelector                   ('#shop-dialog') ;
+const stageChapter = document.querySelector                   ('#stage-chapter') ;
+const shopTabs = document.querySelector                ('#shop-tabs') ;
+const shopBody = document.querySelector                ('#shop-body') ;
+                                              
+let shopView           = 'store';
+let mapPage = 0;
+const art = new Map                          ();
+const soundButton = document.querySelector                   ('#sound') ;
+const levelsButton = document.querySelector                   ('#levels') ;
+const helpButton = document.querySelector                   ('#help') ;
+const stageDialog = document.querySelector                   ('#stage-dialog') ;
+const helpDialog = document.querySelector                   ('#help-dialog') ;
+const stageSummary = document.getElementById('stage-summary') ;
+const stageList = document.getElementById('stage-list') ;
+const resultCard = document.getElementById('result') ;
+const resultTag = document.getElementById('result-tag') ;
+const resultTitle = document.getElementById('result-title') ;
+const resultDetail = document.getElementById('result-detail') ;
+const resultAction = document.querySelector                   ('#result-action') ;
+const HEIGHT = 1280;
+const INK = '#223a42';
+const MUTED = '#a7bfd0';
+const MINT = '#a5f0d3';
+const BELT_Y = 175;
+const SLOT_Y = 274;
+const FLIGHT_TIME = 330;
+const PARTICLE_LIMIT = 180;
+const lastStage = stored        ('pack-flow.last-stage', 0);
+let levelIndex = Number.isSafeInteger(lastStage) && lastStage >= 0 ? lastStage : 0;
+const toolButtons                                  = { MAGNET: document.querySelector                   ('#magnet') , SHUFFLE_BELT: document.querySelector                   ('#shuffle') , EXPAND_SLOT: document.querySelector                   ('#expand')  };
+const toolNames                       = { MAGNET: '磁力', SHUFFLE_BELT: '刷新', EXPAND_SLOT: '扩容' };
+let game = createGame(levelAt(levelIndex), readFailures());
+const hintButton = document.querySelector                   ('#hint') ;
+let keyboardId                    ;
+let hint              = null;
+let hintUntil = 0;
+let recorded                 = 'playing';
+let notice = '';
+let noticeUntil = 0;
+let drag              = null;
+let flights           = [];
+let seals                                                    = [];
+let confetti             = [];
+const boxPops = new Map                ();
+let shakeUntil = 0;
+let bestCombo = 0;
+let earnedStar = false;
+let origins = new Map               ();
+let warnUntil = 0;
+let lastTime = performance.now();
+let now = lastTime;
+let beltOffset = 0;
+
+function geometry() {
+  const size = Math.min(92, Math.floor(628 / game.level.cols), Math.floor(630 / game.level.rows));
+  const width = size * game.level.cols;
+  const height = size * game.level.rows;
+  return { size, width, height, left: (BELT_WIDTH - width) / 2, top: (1390 - height) / 2 };
+}
+
+function slotPoint(index        )        {
+  return { x: 360 + (index - (game.slots.length - 1) / 2) * slotSpacing(), y: SLOT_Y };
+}
+
+function slotSpacing() { return game.slots.length > 3 ? 110 : 132; }
+function announce(message        ) { notice = message; noticeUntil = now + 1850; }
+function failureKey() { return 'pack-flow.failures.' + (levelIndex + 1); }
+function readFailures() {
+  try { return Math.max(0, Number(localStorage.getItem(failureKey())) || 0); } catch { return 0; }
+}
+function stored       (key        , fallback       )        {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; } catch { return fallback; }
+}
+
+function saveProgress() {
+  try { localStorage.setItem('pack-flow.progress', JSON.stringify(progress)); } catch {}
+}
+
+function applyTheme() {
+  theme = catalog.themes.find(candidate => candidate.id === themeChoice) ?? campaignTheme(levelIndex);
+  document.querySelector('main') .style.setProperty('--theme-accent', theme.accent);
+}
+
+function cargoArt(set       , color       ) {
+  const key = set.id + ':' + color;
+  const cached = art.get(key);
+  if (cached) return cached;
+  const item = set.items[color];
+  const image = new Image();
+  image.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="' + item.path + '" fill="#fff8e5" fill-opacity=".78" stroke="' + catalog.palette[color].ink + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  art.set(key, image);
+  return image;
+}
+
+function cargoMark(color       , x        , y        , size        ) {
+  const swatch = catalog.palette[color];
+  const image = cargoArt(theme, color);
+  if (image.complete && image.naturalWidth) ctx.drawImage(image, x - size / 2, y - size / 2, size, size);
+  else text(swatch.code, x, y, size * 0.66, swatch.ink, 850, 'center');
+}
+
+function makeButton(label        , action            , className = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.className = className;
+  button.addEventListener('click', action);
+  return button;
+}
+
+function paragraph(label        , name = 'intro') {
+  const entry = document.createElement('p');
+  entry.className = name;
+  entry.textContent = label;
+  return entry;
+}
+
+function renderShop() {
+  const active = document.activeElement                      ;
+  document.getElementById('shop-title') .textContent = { store: '梦想小店', catalog: '万物图鉴', theme: '主题工坊' }[shopView];
+  for (const button of shopTabs.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.view === shopView));
+  if (shopView === 'theme') {
+    const cards = catalog.themes.map(set => {
+      const button = makeButton(set.name, () => {
+        themeChoice = set.id;
+        try { localStorage.setItem('pack-flow.theme', JSON.stringify(themeChoice)); } catch {}
+        applyTheme(); renderShop();
+        shopBody.querySelector                   ('[aria-pressed="true"]')?.focus();
+      }, 'stage');
+      button.append(paragraph(set.packageName, 'mini'));
+      button.style.borderColor = set.accent;
+      button.setAttribute('aria-pressed', String(themeChoice === set.id));
+      return button;
+    });
+    const automatic = makeButton('跟随章节', () => {
+      themeChoice = '';
+      try { localStorage.removeItem('pack-flow.theme'); } catch {}
+      applyTheme(); renderShop();
+      shopBody.querySelector                   ('[aria-pressed="true"]')?.focus();
+    }, 'wide');
+    automatic.setAttribute('aria-pressed', String(!themeChoice));
+    const grid = document.createElement('div');
+    grid.className = 'stages';
+    grid.append(...cards);
+    shopBody.replaceChildren(paragraph('换主题会同时更换货物、包装和声音，不影响棋盘规则。'), grid, automatic);
+    return;
+  }
+  if (shopView === 'catalog') {
+    const sections = catalog.themes.map(set => {
+      const group = document.createElement('section');
+      const heading = document.createElement('h3');
+      heading.textContent = set.name;
+      const grid = document.createElement('div');
+      grid.className = 'collection';
+      for (const [color, item] of Object.entries(set.items)                                    ) {
+        const found = progress.collectedItems.includes(set.id + ':' + item.key);
+        const card = document.createElement('figure');
+        card.dataset.found = String(found);
+        const image = document.createElement('img');
+        image.src = cargoArt(set, color).src;
+        image.alt = '';
+        const label = document.createElement('figcaption');
+        label.textContent = found ? item.name : '未收集';
+        card.append(image, label);
+        grid.append(card);
+      }
+      group.append(heading, grid);
+      return group;
+    });
+    shopBody.replaceChildren(paragraph('已点亮 ' + progress.collectedItems.length + ' / ' + catalog.themes.length * 5 + ' 件 · 把主题货物真正装进箱子即可收集。'), ...sections);
+    return;
+  }
+  const nextNode = catalog.renovations.find(node => !progress.renovatedNodes.includes(node.id));
+  const scene = document.createElement('div');
+  scene.className = 'storefront';
+  scene.setAttribute('aria-label', '已装修 ' + progress.renovatedNodes.length + ' / ' + catalog.renovations.length);
+  const storeName = document.createElement('div');
+  storeName.className = 'store-name';
+  storeName.textContent = 'PACK & FLOW';
+  scene.append(storeName);
+  for (const node of catalog.renovations) {
+    const element = document.createElement('span');
+    element.className = 'fixture';
+    element.dataset.node = node.id;
+    element.dataset.built = String(progress.renovatedNodes.includes(node.id));
+    element.style.left = node.x + '%';
+    element.style.top = node.y + '%';
+    element.textContent = node.symbol;
+    element.title = node.name;
+    element.setAttribute('aria-hidden', 'true');
+    scene.append(element);
+  }
+  const milestone = paragraph('★ ' + progress.stars + ' 可用  ·  装修 ' + progress.renovatedNodes.length + ' / ' + catalog.renovations.length, 'shop-stats');
+  const action = makeButton(nextNode ? '装修 · ' + nextNode.name + ' · ★' + nextNode.cost : '小店已全部点亮', () => {
+    if (!nextNode || !renovate(progress, catalog.renovations, nextNode.id)) return;
+    saveProgress(); sound.activate(); sound.play('tool'); renderShop();
+    (shopBody.querySelector('button:not(:disabled)') ?? shopTabs.querySelector('button'))?.focus();
+  }, 'primary wide');
+  action.disabled = !nextNode || progress.stars < nextNode.cost;
+  shopBody.replaceChildren(milestone, scene, paragraph(nextNode ? '每个关卡首次通关奖励 1 颗星，重玩不会重复获得。' : '从一块招牌到一间小店，十项装修全部完成。'), action);
+  if (active === shopTabs.querySelector('[data-view="store"]')) active?.focus();
+}
+
+function showShop() {
+  cancelDrag();
+  renderShop();
+  shopDialog.showModal();
+}
+
+function recordResult() {
+  if (game.status === recorded) return;
+  recorded = game.status;
+  try {
+    localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1));
+
+  } catch {}
+  if (game.status === 'won') {
+    earnedStar = clearStage(progress, levelIndex);
+    if (earnedStar) saveProgress();
+    sound.play('win');
+    scatter({ x: 360, y: 566 }, MINT, 24, 196);
+  }
+}
+
+function updateSoundButton() {
+  soundButton.textContent = sound.enabled ? '声音开' : '静音';
+  soundButton.setAttribute('aria-pressed', String(sound.enabled));
+}
+
+function renderStages() {
+  const first = mapPage * pageSize;
+  const last = first + pageSize;
+  const chapter = Math.floor(first / chapterSize);
+  stageChapter.value = String(Math.min(chapter, catalog.themes.length));
+  stageSummary.textContent = '共通关 ' + progress.cleared.length + ' 关 · ' + campaignTheme(first).name + ' · ' + (first + 1) + '–' + last;
+  const entries = Array.from({ length: pageSize }, (_, slot) => {
+    const index = first + slot;
+    const title = catalog.levels[index]?.title ?? modes[index % modes.length].title;
+    const button = makeButton('', () => { stageDialog.close(); load(index); }, 'stage');
+    button.setAttribute('aria-current', String(index === levelIndex));
+    const number = document.createElement('span');
+    number.textContent = String(index + 1).padStart(2, '0') + (progress.cleared.includes(index) ? ' · 已完成' : '');
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    button.append(number, heading);
+    return button;
+  });
+  stageList.replaceChildren(...entries);
+  document.querySelector                   ('#map-prev') .disabled = mapPage === 0;
+}
+
+function showStages() {
+  mapPage = Math.floor(levelIndex / pageSize);
+  renderStages();
+  stageDialog.showModal();
+}
+
+function rect(left        , top        , width        , height        , radius        , fill        , stroke         , lineWidth = 2) {
+  ctx.beginPath();
+  ctx.roundRect(left, top, width, height, radius);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+}
+
+function text(value        , x        , y        , size        , color = INK, weight = 650, align                  = 'left') {
+  ctx.font = weight + ' ' + size + 'px system-ui, "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(value, x, y);
+}
+
+function badge(color       , x        , y        , size        ) {
+  const swatch = catalog.palette[color];
+  rect(x - size / 2, y - size / 2, size, size, size * 0.24, swatch.fill, swatch.ink);
+  cargoMark(color, x, y, size * 0.88);
+}
+
+function belt() {
+  rect(40, 23, 18, 7, 3, MINT);
+  text('PACK & FLOW  /  ' + theme.name, 69, 27, 17, theme.accent, 850);
+  text('万物打包师', 40, 70, 46, '#f4f8fa', 900);
+  rect(28, 111, 664, 116, 23, '#0a1825', '#385467', 2);
+  rect(31, 116, 658, 107, 19, '#1b3040');
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(30, 112, 660, 114, 20);
+  ctx.clip();
+  for (let stripe = -36; stripe < 760; stripe += 36) {
+    const x = stripe + beltOffset;
+    ctx.beginPath();
+    ctx.moveTo(x, 112);
+    ctx.lineTo(x - 29, 226);
+    ctx.strokeStyle = '#2a4354';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  const boxes = [...game.boxes].sort((left, right) => Number(left.sealed) - Number(right.sealed));
+  for (const box of boxes) {
+    if (box.x < -76 || box.x > 796) continue;
+    const swatch = catalog.palette[box.color];
+    const popping = boxPops.get(box.id);
+    const phase = popping === undefined ? 1 : (now - popping) / 265;
+    const scale = phase < 1 && !reduced.matches ? 1 + Math.sin(phase * Math.PI) * (1 - phase) * 0.22 : 1;
+    if (phase >= 1 && popping !== undefined) boxPops.delete(box.id);
+    ctx.save();
+    ctx.translate(box.x, BELT_Y);
+    ctx.scale(scale, scale);
+    ctx.translate(-box.x, -BELT_Y);
+    rect(box.x - 69, 137, 138, 80, theme.corner, '#080f1a');
+    rect(box.x - 69, 130, 138, 80, theme.corner, box.sealed ? theme.accent : theme.box, theme.edge, 2.5);
+    if (theme.finish === 'foil') {
+      for (let strip = 0; strip < 8; strip++) rect(box.x - 57 + strip * 15, 134, 9, 4, 1, '#ffffffa8');
+    } else if (theme.finish === 'velvet') {
+      rect(box.x - 60, 136, 120, 68, 14, 'transparent', '#a36c8d', 1.5);
+    } else if (theme.finish === 'kraft') {
+      rect(box.x - 59, 136, 118, 3, 1, '#aa8052');
+      rect(box.x - 59, 141, 118, 1, 0, '#aa8052');
+    } else {
+      rect(box.x - 62, 136, 124, 68, 6, 'transparent', '#a15741', 2.5);
+    }
+    if (box.sealed) {
+      text('✓ 已封箱', box.x, BELT_Y - 13, 21, '#252221', 850, 'center');
+      text(theme.packageName, box.x, BELT_Y + 11, 14, '#252221', 750, 'center');
+      ctx.restore();
+      continue;
+    }
+    const colors = orderColors(box);
+    const vip = box.vipRemaining > 0;
+    const mixed = new Set(colors).size > 1;
+    const title = vip ? 'VIP  ' + Math.ceil(box.vipRemaining) + 's' : mixed ? '拼色订单' : swatch.label + '色订单';
+    text(title, box.x, 153, 19, vip ? '#84521a' : swatch.ink, 850, 'center');
+    text(theme.packageName, box.x, 199, 11, theme.edge, 750, 'center');
+    const filled = [...box.filledColors];
+    for (const [index, color] of colors.entries()) {
+      const size = Math.min(25, 98 / box.count);
+      const x = box.x + (index - (box.count - 1) / 2) * (size + 6);
+      const match = filled.indexOf(color);
+      const orderSwatch = catalog.palette[color];
+      if (match >= 0) {
+        filled.splice(match, 1);
+        badge(color, x, 182, size);
+      } else {
+        rect(x - size / 2, 182 - size / 2, size, size, 6, orderSwatch.fill, orderSwatch.ink);
+        cargoMark(color, x, 182, size * 0.83);
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  rect(30, 239, 660, 70, 17, '#1a3042', '#314d61');
+  text('暂存', 47, 261, 21, '#eff8fb', 850);
+  text(game.slots.filter(Boolean).length + ' / ' + game.slots.length, 47, 287, 18, MUTED, 750);
+  for (let index = 0; index < game.slots.length; index++) {
+    const spot = slotPoint(index);
+    const warning = warnUntil > now || game.jamTime > 0;
+    const slotWidth = slotSpacing() - 16;
+    rect(spot.x - slotWidth / 2, spot.y - 27, slotWidth, 54, 12, warning ? '#513b3d' : '#112234', warning ? '#ed9d82' : '#426378');
+    const item = game.slots[index];
+    if (item) badge(item.color, spot.x, spot.y, 40);
+    else text('0' + (index + 1), spot.x, spot.y, 20, MUTED, 720, 'center');
+  }
+  text('待补', 636, 261, 18, MUTED, 800, 'center');
+  text(String(game.queue.length), 636, 287, 23, '#ecf7fc', 880, 'center');
+}
+
+function piece(item      , selected         ) {
+  const grid = geometry();
+  const origin = origins.get(item.id) ?? { ...item.origin };
+  const smoothing = reduced.matches ? 1 : 0.46;
+  origin.x += (item.origin.x - origin.x) * smoothing;
+  origin.y += (item.origin.y - origin.y) * smoothing;
+  origins.set(item.id, origin);
+  const swatch = catalog.palette[item.color];
+  const tile = grid.size;
+  const inset = 6;
+  const fill = swatch.fill;
+  const border = selected ? '#15334a' : swatch.ink;
+  const positions = item.shape.map(([dx, dy]) => ({ x: grid.left + (origin.x + dx) * tile, y: grid.top + (origin.y + dy) * tile }));
+  for (const point of positions) rect(point.x + inset, point.y + inset + 5, tile - inset * 2, tile - inset * 2, 15, border);
+  for (const point of positions) {
+    rect(point.x + inset, point.y + inset, tile - inset * 2, tile - inset * 2, 15, fill, border, selected ? 4 : 2.5);
+    rect(point.x + 15, point.y + 11, tile - 30, 5, 2, '#ffffff66');
+  }
+  for (const point of positions) {
+    if (positions.some(other => Math.abs(other.x - point.x - tile) < 0.01 && Math.abs(other.y - point.y) < 0.01)) {
+      rect(point.x + tile - 14, point.y + 18, 28, tile - 36, 5, fill);
+    }
+    if (positions.some(other => Math.abs(other.y - point.y - tile) < 0.01 && Math.abs(other.x - point.x) < 0.01)) {
+      rect(point.x + 18, point.y + tile - 14, tile - 36, 28, 5, fill);
+    }
+  }
+  const first = positions[0];
+  if (item.isMysteryBox) {
+    text('？', first.x + tile, first.y + tile - 7, 52, swatch.ink, 900, 'center');
+    text('盲盒', first.x + tile, first.y + tile + 42, 23, swatch.ink, 850, 'center');
+    return;
+  }
+  cargoMark(item.color, first.x + tile / 2, first.y + tile * (item.lockCount ? 0.42 : 0.5), tile * 0.61);
+  text(swatch.code, first.x + tile - 16, first.y + 17, 12, swatch.ink, 850, 'center');
+  if (item.lockCount) {
+    rect(first.x + 12, first.y + tile - 34, tile - 24, 24, 8, '#e4f5fa', '#4d7a8f');
+    text('冰冻 ×' + item.lockCount, first.x + tile / 2, first.y + tile - 22, 15, '#2e5d6f', 850, 'center');
+  }
+}
+
+function drawHint() {
+  const item = hint && game.items.find(candidate => candidate.id === hint?.itemId);
+  if (!hint || !item || hintUntil <= now) return;
+  const grid = geometry();
+  const [dx, dy] = item.shape[0];
+  const start = { x: grid.left + (item.origin.x + dx + 0.5) * grid.size, y: grid.top + (item.origin.y + dy + 0.5) * grid.size };
+  const end = { x: start.x + (hint.target.x - item.origin.x) * grid.size * 0.75, y: start.y + (hint.target.y - item.origin.y) * grid.size * 0.75 };
+  if (hint.action === 'ship' && !hint.ready) {
+    rect(start.x - grid.size * 0.36, start.y - grid.size * 0.36, grid.size * 0.72, grid.size * 0.72, 12, 'transparent', '#ffdb82', 4);
+    return;
+  }
+  const angle = Math.atan2(end.y - start.y, end.x - start.x);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.moveTo(end.x - Math.cos(angle - 0.55) * 18, end.y - Math.sin(angle - 0.55) * 18);
+  ctx.lineTo(end.x, end.y);
+  ctx.lineTo(end.x - Math.cos(angle + 0.55) * 18, end.y - Math.sin(angle + 0.55) * 18);
+  ctx.strokeStyle = '#1a2427';
+  ctx.lineWidth = 11;
+  ctx.stroke();
+  ctx.strokeStyle = '#ffdb82';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function board() {
+  const grid = geometry();
+  const stageNumber = String(levelIndex + 1).padStart(2, '0');
+  text(stageNumber + '  /  ' + game.level.title, 40, 334, 29, '#f2f8fc', 850);
+  text(game.remaining === null ? levelIndex < storyLength ? '第 ' + (Math.floor(levelIndex / chapterSize) + 1) + ' 章' : '无限班次' : '剩余 ' + Math.ceil(game.remaining) + ' 秒', 680, 334, 17, game.remaining !== null && game.remaining < 10 ? '#ffc093' : MUTED, 850, 'right');
+  ctx.save();
+  if (shakeUntil > now && !reduced.matches) {
+    const strength = (shakeUntil - now) / 200;
+    ctx.translate(Math.sin((shakeUntil - now) * 0.155) * strength * 8, 0);
+  }
+  rect(grid.left - 12, grid.top - 5, grid.width + 24, grid.height + 24, 22, '#0a1724');
+  rect(grid.left - 12, grid.top - 12, grid.width + 24, grid.height + 24, 22, '#d2ddd8', '#6d9095', 3);
+  for (let row = 0; row < game.level.rows; row++) {
+    for (let col = 0; col < game.level.cols; col++) {
+      rect(grid.left + col * grid.size + 2, grid.top + row * grid.size + 2, grid.size - 4, grid.size - 4, 12, (col + row) % 2 ? '#eef0e6' : '#e6ece3');
+    }
+  }
+  const arrows = { UP: '↑', DOWN: '↓', LEFT: '←', RIGHT: '→' };
+  for (const rail of game.level.rails ?? []) {
+    const x = grid.left + (rail.x + 0.5) * grid.size;
+    const y = grid.top + (rail.y + 0.5) * grid.size;
+    rect(x - grid.size / 2 + 3, y - grid.size / 2 + 3, grid.size - 6, grid.size - 6, 12, '#f7e1a9', '#c59743');
+    text(arrows[rail.dir], x, y, 43, '#644b20', 900, 'center');
+  }
+  for (const gate of game.level.gates) {
+    const left = grid.left + gate * grid.size;
+    const activeGate = drag !== null && game.items.some(item => item.id === drag?.id && cells(item).some(([col, row]) => col === gate && row === 0));
+    rect(left + 6, grid.top - 35, grid.size - 12, 29, 8, activeGate ? '#f8cf7a' : MINT, activeGate ? '#9d6b26' : '#457869');
+    text('↑ 出货', left + grid.size / 2, grid.top - 20, 17, '#254636', 850, 'center');
+  }
+  const selected = game.items.find(item => item.id === (drag?.id ?? keyboardId));
+  for (const item of game.items) if (item !== selected) piece(item, false);
+  if (selected) piece(selected, true);
+  drawHint();
+  ctx.restore();
+  rect(38, 1019, 644, 38, 10, theme.panel);
+  const tip = hintUntil > now ? notice : game.level.tip;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(48, 1019, 530, 38);
+  ctx.clip();
+  text(tip, 312, 1038, 18, '#cde2ec', 680, 'center');
+  ctx.restore();
+}
+
+function destination(point             )        {
+  if (point.kind === 'buffer') return slotPoint(point.index);
+  const box = game.boxes.find(candidate => candidate.id === point.id);
+  return { x: Math.min(735, box?.x ?? point.x), y: BELT_Y };
+}
+
+function scatter(point       , tint        , count        , spread = 135) {
+  if (reduced.matches) return;
+  for (let index = 0; index < count && confetti.length < PARTICLE_LIMIT; index++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = spread * (0.45 + Math.random() * 0.65);
+    confetti.push({ ...point, tint, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - spread * 0.54, size: 4 + Math.random() * 7, angle, spin: Math.random() * 14 - 7, started: now, life: 0.28 + Math.random() * 0.38 });
+  }
+}
+
+function effects() {
+  if (reduced.matches) return;
+  flights = flights.filter(flight => {
+    const progress = Math.max(0, (now - flight.started) / FLIGHT_TIME);
+    const end = destination(flight.to);
+    if (progress >= 1) {
+      if (flight.to.kind === 'box') {
+        boxPops.set(flight.to.id, now);
+        sound.play('load', flight.combo);
+      }
+      scatter(end, catalog.palette[flight.color].fill, 5);
+      return false;
+    }
+    const ease = 1 - (1 - progress) ** 2;
+    badge(flight.color, flight.from.x + (end.x - flight.from.x) * ease, flight.from.y + (end.y - flight.from.y) * ease - Math.sin(progress * Math.PI) * 42, 44 - 18 * ease);
+    return true;
+  });
+  seals = seals.filter(seal => now - seal.started < 420);
+  for (const seal of seals) {
+    const progress = (now - seal.started) / 420;
+    ctx.save();
+    ctx.globalAlpha = (1 - progress) * 0.85;
+    const size = 44 + progress * 96;
+    rect(seal.point.x - size / 2, seal.point.y - size / 4, size, size / 2, 13, 'transparent', catalog.palette[seal.color].fill, 4);
+    ctx.restore();
+  }
+  confetti = confetti.filter(particle => {
+    const age = (now - particle.started) / 1000;
+    if (age >= particle.life) return false;
+    ctx.save();
+    ctx.globalAlpha = 1 - age / particle.life;
+    ctx.translate(particle.x + age * particle.vx, particle.y + age * particle.vy + 240 * age ** 2);
+    ctx.rotate(particle.angle + age * particle.spin);
+    ctx.fillStyle = particle.tint;
+    ctx.fillRect(-particle.size / 2, -particle.size / 4, particle.size, particle.size / 2);
+    ctx.restore();
+    return true;
+  });
+}
+
+function footer() {
+  rect(0, 1064, 720, 216, 0, '#0e1e2c');
+  rect(40, 1064, 640, 2, 1, '#385467');
+  const warning = warnUntil > now || game.jamTime > 0;
+  const label = game.status === 'won' ? '全部打包完成' : game.status === 'lost' ? '本轮未完成' : warning ? '暂存已满 · 先处理可直装货物' : noticeUntil > now ? notice : '装箱进度  ' + game.packed + ' / ' + game.total;
+  text(label, 40, 1091, 22, warning && game.status === 'playing' ? '#ffb5a0' : '#eaf5fb', 800);
+  if (game.combo > 1) text('连击 ×' + game.combo, 680, 1091, 21, MINT, 850, 'right');
+  rect(40, 1111, 640, 7, 4, '#365064');
+  if (game.packed) rect(40, 1111, 640 * game.packed / game.total, 7, 4, MINT);
+}
+
+function updateResult() {
+  resultCard.hidden = game.status === 'playing';
+  if (resultCard.hidden || resultCard.dataset.outcome === game.status) return;
+  resultCard.dataset.outcome = game.status;
+  const won = game.status === 'won';
+  resultTag.textContent = won ? earnedStar ? '★ +1 整理星星' : 'ORDER COMPLETE' : 'SHIFT PAUSED';
+  resultTitle.textContent = won ? '打包完成！' : '这一单还差一点';
+  resultDetail.textContent = won ? '已装箱 ' + game.packed + ' 件 · 最高连击 ×' + Math.max(1, bestCombo) : game.remaining === 0 ? '时间到了。可以重玩本关。' : '暂存槽已满。试试先发出能直装的货物。';
+  resultAction.textContent = !won ? '重玩本关' : '继续下一关 →';
+}
+
+function consume(event           ) {
+  if (event.kind === 'reject') {
+    if (now + 320 > warnUntil) { sound.play('warning'); shakeUntil = now + 180; }
+    warnUntil = now + 640;
+    return;
+  }
+  if (event.kind === 'open' || event.kind === 'unlock') {
+    sound.play('open');
+    const grid = geometry();
+    scatter({ x: grid.left + (event.point.x + 0.5) * grid.size, y: grid.top + (event.point.y + 0.5) * grid.size }, event.kind === 'open' ? '#ffcf78' : '#a1eaff', 12);
+    announce(event.kind === 'open' ? '盲盒开启 · 两件新货物' : '冰冻解除 · 方块可移动');
+    return;
+  }
+  if (event.kind === 'seal') {
+    sound.play(event.vip ? 'vip' : 'seal');
+    if (event.vip) announce('VIP 急单完成 · 触发磁力奖励');
+    const point = { x: event.x, y: BELT_Y };
+    scatter(point, catalog.palette[event.color].fill, 11);
+    if (!reduced.matches) seals.push({ point, color: event.color, started: now });
+    return;
+  }
+  if (event.kind !== 'ship') return;
+  if (event.to.kind === 'box' && collectCargo(progress, theme, event.item.color)) saveProgress();
+  const combo = event.combo ?? 0;
+  bestCombo = Math.max(bestCombo, combo);
+  if (event.to.kind === 'buffer') sound.play('send');
+  if (reduced.matches) {
+    if (event.to.kind === 'box') sound.play('load', combo);
+    return;
+  }
+  const grid = geometry();
+  const occupied = cells(event.item);
+  const center = occupied.reduce((sum, [x, y]) => ({ x: sum.x + x / occupied.length, y: sum.y + y / occupied.length }), { x: 0, y: 0 });
+  const from = event.fromSlot === undefined ? { x: grid.left + (center.x + 0.5) * grid.size, y: grid.top + (center.y + 0.5) * grid.size } : slotPoint(event.fromSlot);
+  flights.push({ from, to: event.to, color: event.item.color, started: now, combo });
+}
+
+function updateControls() {
+  previous.disabled = levelIndex === 0;
+  hintButton.disabled = game.status !== 'playing';
+  next.disabled = levelIndex >= Number.MAX_SAFE_INTEGER - 1;
+  for (const tool of Object.keys(toolNames)          ) {
+    const button = toolButtons[tool];
+    const label = toolNames[tool] + ' ×' + game.tools[tool];
+    if (button.textContent !== label) button.textContent = label;
+    button.disabled = game.status !== 'playing' || game.tools[tool] === 0;
+  }
+  const message = game.status === 'won' ? '打包完成' : game.status === 'lost' ? '关卡未完成，可选择重玩' : noticeUntil > now ? notice : game.level.title + '：' + game.level.tip;
+  if (statusText.textContent !== message) statusText.textContent = message;
+}
+
+function frame(time        ) {
+  now = time;
+  const elapsed = Math.min(0.1, Math.max(0, (time - lastTime) / 1000));
+  lastTime = time;
+  if (!document.hidden && !stageDialog.open && !helpDialog.open && !shopDialog.open) {
+    tick(game, elapsed);
+    beltOffset = (beltOffset + elapsed * (game.level.beltSpeed ?? 76)) % 36;
+  }
+  for (const event of game.events.splice(0)) consume(event);
+  recordResult();
+  ctx.fillStyle = theme.baseColor;
+  ctx.fillRect(0, 0, BELT_WIDTH, HEIGHT);
+  belt();
+  board();
+  footer();
+  effects();
+  updateResult();
+  updateControls();
+  requestAnimationFrame(frame);
+}
+
+function pointer(event              )        {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: Math.min(850, Math.max(-130, (event.clientX - bounds.left) * BELT_WIDTH / bounds.width)),
+    y: Math.min(1410, Math.max(-130, (event.clientY - bounds.top) * HEIGHT / bounds.height)),
+  };
+}
+
+function movePointer(event              ) {
+  const active = drag;
+  if (!active || active.pointer !== event.pointerId) return;
+  const grid = geometry();
+  const latest = pointer(event);
+  const deltaX = latest.x - active.last.x;
+  const deltaY = latest.y - active.last.y;
+  const steps = Math.max(1, Math.ceil(Math.hypot(deltaX, deltaY) / (grid.size / 5)));
+  for (let step = 1; step <= steps; step++) {
+    const sampleX = active.last.x + deltaX * step / steps;
+    const sampleY = active.last.y + deltaY * step / steps;
+    const outcome = dragToward(game, active.id, { x: active.origin.x + (sampleX - active.start.x) / grid.size, y: active.origin.y + (sampleY - active.start.y) / grid.size });
+    if (outcome === 'packed' || outcome === 'buffered') {
+      endPointer(event);
+      return;
+    }
+    if (outcome === 'slid') sound.play('move');
+    if (outcome === 'blocked') break;
+  }
+  active.last = latest;
+}
+
+function endPointer(event              ) {
+  if (drag?.pointer === event.pointerId) cancelDrag();
+}
+
+function cancelDrag() {
+  const pointerId = drag?.pointer;
+  drag = null;
+  if (pointerId !== undefined && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+}
+
+canvas.addEventListener('pointerdown', event => {
+  if (drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || event.button !== 0) return;
+  sound.activate();
+  keyboardId = undefined;
+  hint = null;
+  hintUntil = 0;
+  canvas.focus({ preventScroll: true });
+  const grid = geometry();
+  const start = pointer(event);
+  const item = itemAt(game, Math.floor((start.x - grid.left) / grid.size), Math.floor((start.y - grid.top) / grid.size));
+  if (!item || !movable(item)) return;
+  drag = { pointer: event.pointerId, id: item.id, start, origin: { ...item.origin }, last: start };
+  canvas.setPointerCapture(event.pointerId);
+});
+canvas.addEventListener('pointermove', movePointer);
+canvas.addEventListener('pointerup', event => { movePointer(event); endPointer(event); });
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('lostpointercapture', endPointer);
+
+const arrowKeys                        = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
+
+function selectCargo(step        ) {
+  const choices = game.items.filter(movable);
+  if (!choices.length) return;
+  const current = choices.findIndex(item => item.id === keyboardId);
+  const index = current < 0 ? (step < 0 ? choices.length - 1 : 0) : (current + step + choices.length) % choices.length;
+  keyboardId = choices[index].id;
+  announce('已选中 ' + theme.items[choices[index].color].name + ' · 用方向键移动');
+}
+
+function showHint() {
+  if (game.status !== 'playing') return;
+  hint = findHint(game);
+  hintUntil = now + 3200;
+  announce(!hint ? '先挪开挡路货物，找一条到发货口的路' : hint.ready ? '沿箭头移动，可接上当前订单' : hint.action === 'ship' ? '先别推出 · 等待同色订单' : '沿箭头靠近出口，等同色订单');
+  noticeUntil = hintUntil;
+}
+
+hintButton.addEventListener('click', showHint);
+canvas.addEventListener('keydown', event => {
+  if (event.altKey || event.ctrlKey || event.metaKey || drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open) return;
+  const direction = arrowKeys[event.key];
+  const key = event.key.toLowerCase();
+  if (!direction && !['enter', ' ', 'q', 'e', 'h', 'escape'].includes(key)) return;
+  event.preventDefault();
+  if (key === 'h') { showHint(); return; }
+  hint = null;
+  hintUntil = 0;
+  if (key === 'escape') { keyboardId = undefined; return; }
+  if (!direction) { selectCargo(key === 'q' || event.shiftKey ? -1 : 1); return; }
+  const item = game.items.find(piece => piece.id === keyboardId);
+  if (!item || !movable(item)) { selectCargo(1); return; }
+  sound.activate();
+  const result = dragToward(game, item.id, { x: item.origin.x + direction.x, y: item.origin.y + direction.y });
+  if (result === 'slid') sound.play('move');
+  if (result === 'packed' || result === 'buffered') keyboardId = undefined;
+});
+
+function load(index        ) {
+  if (!Number.isSafeInteger(index) || index < 0) return;
+  for (const event of game.events.splice(0)) consume(event);
+  recordResult();
+  cancelDrag();
+  levelIndex = index;
+  try { localStorage.setItem('pack-flow.last-stage', JSON.stringify(index)); } catch {}
+  keyboardId = undefined;
+  hint = null;
+  hintUntil = 0;
+  applyTheme();
+  game = createGame(levelAt(index), readFailures());
+  recorded = 'playing';
+  notice = '';
+  noticeUntil = 0;
+  flights = [];
+  seals = [];
+  confetti = [];
+  boxPops.clear();
+  shakeUntil = 0;
+  bestCombo = 0;
+  earnedStar = false;
+  delete resultCard.dataset.outcome;
+  updateResult();
+  origins = new Map();
+  warnUntil = 0;
+  updateControls();
+}
+previous.addEventListener('click', () => load(levelIndex - 1));
+retry.addEventListener('click', () => load(levelIndex));
+next.addEventListener('click', () => load(levelIndex + 1));
+levelsButton.addEventListener('click', () => { cancelDrag(); showStages(); });
+helpButton.addEventListener('click', () => { cancelDrag(); helpDialog.showModal(); });
+soundButton.addEventListener('click', () => { sound.toggle(); updateSoundButton(); });
+resultAction.addEventListener('click', () => {
+  if (game.status === 'lost') load(levelIndex);
+  else if (game.status === 'won') load(levelIndex + 1);
+});
+for (const tool of Object.keys(toolNames)          ) {
+  toolButtons[tool].addEventListener('click', () => {
+    sound.activate();
+    if (!useTool(game, tool)) {
+      if (tool === 'MAGNET' && game.status === 'playing' && game.tools.MAGNET) announce('磁力需要当前订单中有可匹配的货物');
+      return;
+    }
+    sound.play('tool');
+    hint = null;
+    hintUntil = 0;
+    keyboardId = undefined;
+    if (tool === 'SHUFFLE_BELT') origins = new Map();
+    announce(tool === 'MAGNET' ? '磁力打包 · 已吸附匹配货物' : tool === 'SHUFFLE_BELT' ? '传送带已刷新 · 暂存槽已处理' : '暂存区扩容至 4 格');
+  });
+}
+const endless = new Option('∞ 无限班次', String(catalog.themes.length));
+stageChapter.append(...catalog.themes.map((set, index) => new Option((index + 1) + ' · ' + set.name, String(index))), endless);
+stageChapter.addEventListener('change', () => {
+  mapPage = Number(stageChapter.value) * chapterSize / pageSize;
+  renderStages();
+});
+document.getElementById('map-prev') .addEventListener('click', () => { if (mapPage > 0) { mapPage--; renderStages(); } });
+document.getElementById('map-next') .addEventListener('click', () => { mapPage++; renderStages(); });
+document.getElementById('map-resume') .addEventListener('click', () => { stageDialog.close(); load(progress.unlockedLevel); });
+document.getElementById('shop') .addEventListener('click', showShop);
+for (const [view, label] of [['store', '小店'], ['catalog', '图鉴'], ['theme', '主题']]                        ) {
+  const button = makeButton(label, () => { shopView = view; renderShop(); });
+  button.dataset.view = view;
+  shopTabs.append(button);
+}
+applyTheme();
+const dpr = Math.min(2, Math.max(1, devicePixelRatio || 1));
+canvas.width = BELT_WIDTH * dpr;
+canvas.height = HEIGHT * dpr;
+ctx.scale(dpr, dpr);
+updateSoundButton();
+updateControls();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
