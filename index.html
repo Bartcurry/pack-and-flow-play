@@ -1363,7 +1363,7 @@ function* searchBudget(board      , searchLimit        , suggest         )      
   if (!level.masterPar || board.movesLeft === null || level.cols > 8 || level.rows > 8 || level.orders.length !== 1 || level.rails?.length || level.bufferLimit !== 0) return { kind: 'unknown' };
   if (level.turntables?.length) return yield* reviewTurns(board, searchLimit, suggest);
   const remaining = board.movesLeft;
-  const parts = level.items.map(item => {
+  const parts = level.items.map((item, index) => {
     const vertical = item.moveAxis === 'V';
     const coordinate = vertical ? item.origin.x : item.origin.y;
     const stride = vertical ? level.cols : 1;
@@ -1371,6 +1371,8 @@ function* searchBudget(board      , searchLimit        , suggest         )      
     const live = board.items.find(candidate => candidate.id === item.id);
     return {
       ...item, vertical, stride, coordinateStart, coordinate,
+      occupant: item.isBarrier ? 2 : index + 3,
+      canShip: !item.isBarrier && vertical && gateAllows(level, coordinate, item.color),
       limit: (vertical ? level.rows : level.cols) - item.shape.length,
       initial: live ? (vertical ? live.origin.y : live.origin.x) : -1
     };
@@ -1379,7 +1381,8 @@ function* searchBudget(board      , searchLimit        , suggest         )      
       item.shape.some(([x, y]) => item.vertical ? x !== 0 || y < 0 || y >= item.shape.length : y !== 0 || x < 0 || x >= item.shape.length))) return { kind: 'unknown' };
 
   const cellKey = (x        , y        ) => y * level.cols + x;
-  const cargoCells = new Map(parts.flatMap((part, index) => part.isBarrier ? [] : [[part.id, index + 3]         ]));
+  const cargoIndices = parts.flatMap((part, index) => part.isBarrier ? [] : [index]);
+  const cargoCells = new Map(cargoIndices.map(index => [parts[index].id, parts[index].occupant]         ));
   const requiredAt = ({ x, y, cargo }               ) => ({ key: cellKey(x, y), owner: cargo === undefined ? 2 : cargoCells.get(cargo) ?? 255 });
   const lockTiles = (level.interlocks ?? []).map(lock => ({
     entrances: lock.exits,
@@ -1395,33 +1398,42 @@ function* searchBudget(board      , searchLimit        , suggest         )      
   const depths = [0];
   const firstMoves                                         = suggest ? [undefined] : undefined;
   const seen = new Set(queue);
+  const positions = new Int8Array(parts.length);
   const boardCells = new Uint8Array(level.cols * level.rows);
+  const fixedWalls = new Uint8Array(boardCells.length);
+  for (const { x, y } of level.walls ?? []) fixedWalls[cellKey(x, y)] = 1;
   const closed = new Uint8Array(boardCells.length);
-  const fixedWalls = (level.walls ?? []).map(({ x, y }) => cellKey(x, y));
   const lockedExits = new Uint8Array(level.cols);
+  const firstPositionCode = '0'.charCodeAt(0);
+  const shippedCode = 'x'.charCodeAt(0);
+  const isPowered = (lock                          ) => {
+    for (const { key, owner } of lock.plates) if (boardCells[key] !== owner) return false;
+    for (const key of lock.release) if (boardCells[key] === 2) return false;
+    return true;
+  };
   for (let cursor = 0; cursor < queue.length; cursor++) {
     if (cursor && cursor % 384 === 0) yield;
     if (cursor >= searchLimit) return { kind: 'unknown' };
     const state = queue[cursor];
     const steps = depths[cursor];
     let sent = 0;
-    for (const [index, part] of parts.entries()) {
-      if (!part.isBarrier && state[index] === 'x') sent++;
-    }
+    for (const index of cargoIndices) if (state.charCodeAt(index) === shippedCode) sent++;
     if (sent === demand.length) return { kind: 'possible', firstMove: firstMoves?.[cursor] };
     if (steps >= remaining) continue;
     boardCells.fill(0);
-    closed.fill(0);
-    for (const key of fixedWalls) closed[key] = 1;
+    closed.set(fixedWalls);
     lockedExits.fill(0);
-    for (const [index, part] of parts.entries()) {
-      if (state[index] === 'x') continue;
-      const start = part.coordinateStart + Number(state[index]) * part.stride;
-      const occupant = part.isBarrier ? 2 : index + 3;
-      for (let offset = 0; offset < part.shape.length; offset++) boardCells[start + offset * part.stride] = occupant;
+    for (let index = 0; index < parts.length; index++) {
+      const code = state.charCodeAt(index);
+      const position = code === shippedCode ? -1 : code - firstPositionCode;
+      positions[index] = position;
+      if (position < 0) continue;
+      const part = parts[index];
+      let cell = part.coordinateStart + position * part.stride;
+      for (let offset = 0; offset < part.shape.length; offset++, cell += part.stride) boardCells[cell] = part.occupant;
     }
     for (const lock of lockTiles) {
-      if (lock.plates.every(({ key, owner }) => boardCells[key] === owner) && lock.release.every(key => boardCells[key] !== 2)) continue;
+      if (isPowered(lock)) continue;
       for (const key of lock.shutters) closed[key] = 1;
       for (const key of lock.entrances) lockedExits[key] = 1;
     }
@@ -1440,15 +1452,16 @@ function* searchBudget(board      , searchLimit        , suggest         )      
         }
       }
     };
-    for (const [index, part] of parts.entries()) {
-      if (state[index] === 'x') continue;
-      const position = Number(state[index]);
+    for (let index = 0; index < parts.length; index++) {
+      const position = positions[index];
+      if (position < 0) continue;
+      const part = parts[index];
       const leading = part.coordinateStart + (position - 1) * part.stride;
       const trailing = part.coordinateStart + (position + part.shape.length) * part.stride;
       if (position > 0 && !boardCells[leading] && !closed[leading]) enqueue(index, String(position - 1));
       if (position < part.limit && !boardCells[trailing] && !closed[trailing]) enqueue(index, String(position + 1));
-      const matches = order.ordered ? demand[sent] === part.color : demand.includes(part.color);
-      if (!part.isBarrier && part.vertical && position === 0 && matches && gateAllows(level, part.coordinate, part.color) && !lockedExits[part.coordinate]) enqueue(index, 'x');
+      if (part.canShip && position === 0 && !lockedExits[part.coordinate] &&
+          (order.ordered ? demand[sent] === part.color : demand.includes(part.color))) enqueue(index, 'x');
     }
   }
   return { kind: 'over' };
