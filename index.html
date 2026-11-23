@@ -160,8 +160,8 @@
     .circuit-detail-row.dense { gap: .65cqw; }
     .circuit-detail-row.dense > span + span { padding-left: .65cqw; }
     .circuit-detail-row.dense b { margin-left: .2cqw; }
-    #master-filters { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 2cqw; }
-    #master-filters button { min-height: 8.2cqw; color: #dedaf3; background: #34334b; }
+    #master-filters { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 1.6cqw; }
+    #master-filters button { min-height: max(26px, 8.2cqw); padding-inline: .5cqw; color: #dedaf3; background: #34334b; }
     #master-filters button[aria-pressed="true"] { border-color: #9bded7; background: #315655; color: #cef7ef; }
     #master-tally { margin: 2.25cqw 0; color: #d5c8ec; font-size: clamp(11px, 3cqw, 15px); }
     .master-card[data-circuit="true"] { background: linear-gradient(125deg,#28394c,#263842); border-color: #4e8c95; }
@@ -233,6 +233,7 @@
       <p class="intro">每日只出终局级联锁题，无道具。通关一星，比最短解多一步以内两星，走到最短解三星；同用步才比较时间。</p>
       <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
       <button type="button" class="wide session-history" id="daily-history" hidden>复盘此日最近一局</button>
+      <button type="button" class="wide session-history" id="daily-drafts" hidden>查看未完局</button>
       <input id="daily-link" class="daily-link" type="url" readonly hidden aria-label="可复制的挑战链接"><p id="daily-share-status" class="intro" role="status"></p>
     </dialog>
     <dialog id="relay-dialog" aria-labelledby="relay-title">
@@ -258,7 +259,7 @@
     <dialog id="master-dialog" aria-labelledby="master-title">
       <header><div><span class="eyebrow">MASTER WORKSHOP</span><h2 id="master-title">工坊关卡册</h2></div><form method="dialog"><button type="submit" aria-label="关闭大师关卡册">关闭</button></form></header>
       <div class="master-banner"><strong>腾出一条路</strong><p>灰色挡板不是货物，只能沿箭头推拉，不能出货。推拉一格与出货各计一步。每 5 关进入大师单，逢 10 关是更难的验收单。后段需要压住踏板，开启同字母的闸门；带 ↥ 的踏板则要松开，才能触发对应闸门。</p></div>
-      <div id="master-filters" aria-label="筛选大师谜题"><button type="button" data-filter="all" aria-pressed="true">全部</button><button type="button" data-filter="slide" aria-pressed="false">移挡</button><button type="button" data-filter="circuit" aria-pressed="false">联锁</button><button type="button" data-filter="cargo" aria-pressed="false">货物</button><button type="button" data-filter="turn" aria-pressed="false">转台</button></div>
+      <div id="master-filters" aria-label="筛选大师谜题"><button type="button" data-filter="all" aria-pressed="true">全部</button><button type="button" data-filter="saved" aria-pressed="false">续玩</button><button type="button" data-filter="slide" aria-pressed="false">移挡</button><button type="button" data-filter="circuit" aria-pressed="false">联锁</button><button type="button" data-filter="cargo" aria-pressed="false">货物</button><button type="button" data-filter="turn" aria-pressed="false">转台</button></div>
       <p id="master-tally" role="status"></p>
       <button type="button" class="wide session-history" id="master-history" hidden>复盘最近一局</button>
       <div id="master-list" aria-label="大师谜题"></div>
@@ -1354,7 +1355,8 @@ export async function diagnoseReview(level       , moves                       ,
                                                                              
                                                       
 export const SESSION_KEY = 'pack-flow.session-book.v1';
-const BOOK_LIMIT = 18;
+const DRAFT_LIMIT = 24;
+const REPLAY_LIMIT = 24;
 const MOVE_LIMIT = 200;
 
 export function sessionId(index        , day               , edition         ) {
@@ -1401,9 +1403,20 @@ export function sessionBook(value         )              {
     const latest = validSession(raw.latest) && raw.latest.status !== 'playing' ? raw.latest : undefined;
     if (active || latest) entries.push([key, { active, latest }]);
   }
-  const freshness = ({ active, latest }             ) => Math.max(active?.savedAt ?? 0, latest?.savedAt ?? 0);
-  entries.sort(([, left], [, right]) => freshness(right) - freshness(left));
-  return Object.fromEntries(entries.slice(0, BOOK_LIMIT));
+  const retain = (field                   , limit        ) => new Set(entries
+    .filter(([, slot]) => slot[field])
+    .sort(([, left], [, right]) => right[field] .savedAt - left[field] .savedAt)
+    .slice(0, limit)
+    .map(([key]) => key));
+  const drafts = retain('active', DRAFT_LIMIT);
+  const replays = retain('latest', REPLAY_LIMIT);
+  const kept                          = [];
+  for (const [key, slot] of entries) {
+    const active = drafts.has(key) ? slot.active : undefined;
+    const latest = replays.has(key) ? slot.latest : undefined;
+    if (active || latest) kept.push([key, { active, latest }]);
+  }
+  return Object.fromEntries(kept);
 }
 
 export function captureSession(game      , seconds        , savedAt        )                            {
@@ -1603,7 +1616,8 @@ const masterEntry = document.querySelector                   ('#master-entry') ;
 const masterList = document.getElementById('master-list') ;
 const masterFilters = document.getElementById('master-filters') ;
 const masterTally = document.getElementById('master-tally') ;
-let masterFilter                                                 = 'all';
+let masterFilter                                                           = 'all';
+                                                                                                             
 const workshopBar = document.getElementById('master-rules') ;
 const circuitDetails = document.getElementById('circuit-details') ;
 const circuitLabel = document.getElementById('circuit-label') ;
@@ -1725,6 +1739,7 @@ const relayLink = document.querySelector                  ('#relay-link') ;
 const relayMessage = document.getElementById('relay-message') ;
 const dailyStart = document.querySelector                   ('#daily-start') ;
 const dailyHistory = document.querySelector                   ('#daily-history') ;
+const dailyDrafts = document.querySelector                   ('#daily-drafts') ;
 const masterHistory = document.querySelector                   ('#master-history') ;
 let latestMasterReview                                                     ;
 const hintButton = document.querySelector                   ('#hint') ;
@@ -1937,8 +1952,14 @@ function renderDaily() {
   dailyDate.textContent = dailySelection === today ? '今天 · ' + dailySelection : dailySelection;
   const record = dailyRecords[dailySelection];
   const challenge = dailyForDay(dailySelection);
-  const slot = readSessionBook()[sessionId(0, dailySelection)];
+  const sessions = readSessionBook();
+  const slot = sessions[sessionId(0, dailySelection)];
   const draft = restoreSession(challenge.level, slot?.active);
+  dailyDrafts.hidden = !Object.entries(sessions).some(([key, entry]) => {
+    if (!entry.active || !key.startsWith('daily:')) return false;
+    const day = key.slice(6);
+    return day <= today && dailySerial(day) !== null;
+  });
   dailyStart.textContent = draft ? '继续挑战 · 已走 ' + draft.journal .length + ' 步 →' : '开始挑战 →';
   dailyHistory.hidden = !restoreSession(challenge.level, slot?.latest);
   dailyBest.textContent = record ? '个人最佳：' + dailyString(record) : challenge.level.title + ' · 最短 ' + challenge.par + ' 步 · 上限 ' + challenge.level.stepLimit + ' 步';
@@ -1989,12 +2010,7 @@ async function shareDaily(day        ) {
   }
 }
 
-function renderMasters() {
-  const sessionData = readSessionBook();
-  latestMasterReview = findLatestMasterReview(sessionData);
-  masterHistory.hidden = !latestMasterReview;
-  if (latestMasterReview) masterHistory.textContent = '复盘最近一局 · ' + latestMasterReview.level.title;
-  for (const button of masterFilters.querySelectorAll                   ('button')) button.setAttribute('aria-pressed', String(button.dataset.filter === masterFilter));
+function workshopCatalog(sessionData             )                  {
   const schedule = levelIndex + 1 > catalog.masterFinal ? [...masterStages, ...Array.from({ length: 2 }, (_, slot) => {
     const stage = Math.floor(levelIndex / 10) * 10 + 5 + slot * 5;
     return { index: stage - 1, level: authoredLevel(stage - 1)  };
@@ -2010,17 +2026,31 @@ function renderMasters() {
       return [{ index, level, archived }];
     })
   );
-  const stages = [...archives, ...schedule.map(entry => ({ ...entry, archived: undefined }))].filter(({ level }) => {
+  return [...archives, ...schedule.map(entry => ({ ...entry, archived: undefined }))].filter(({ level }) => {
     if (masterFilter === 'all') return true;
     if (masterFilter === 'cargo') return hasCargoPlates(level);
     if (masterFilter === 'turn') return Boolean(level.turntables);
     return level.master && Boolean(level.interlocks) === (masterFilter === 'circuit');
   });
+}
+
+function renderMasters() {
+  const sessionData = readSessionBook();
+  const savedView = masterFilter === 'saved';
+  latestMasterReview = savedView ? undefined : findLatestMasterReview(sessionData);
+  masterHistory.hidden = !latestMasterReview;
+  if (latestMasterReview) masterHistory.textContent = '复盘最近一局 · ' + latestMasterReview.level.title;
+  for (const button of masterFilters.querySelectorAll                   ('button')) button.setAttribute('aria-pressed', String(button.dataset.filter === masterFilter));
+  const stages = savedView ? unfinishedBoards(sessionData) : workshopCatalog(sessionData);
   const ranked = stages.filter(stage => !stage.archived);
-  masterTally.textContent = '已通关 ' + ranked.filter(({ index }) => masterBest(index)).length + ' / ' + ranked.length;
-  masterList.replaceChildren(...stages.map(({ index, level, archived }) => {
-    const button = makeButton('', () => { masterDialog.close(); load(index, null, false, false, null, archived); }, 'master-card');
-    button.setAttribute('aria-label', '第 ' + (index + 1) + ' 关' + (archived ? '旧版 · 最短 ' + level.masterPar + ' 步 · ' : '：') + level.title);
+  masterList.setAttribute('aria-label', savedView ? '可续玩的未完局' : '大师谜题');
+  masterTally.textContent = savedView
+    ? stages.length ? stages.length + ' 局未完' : '暂无未完局'
+    : '已通关 ' + ranked.filter(({ index }) => masterBest(index)).length + ' / ' + ranked.length;
+  masterList.replaceChildren(...stages.map(({ index, level, archived, day, draft }) => {
+    const button = makeButton('', () => { masterDialog.close(); load(index, day ?? null, false, false, null, archived); }, 'master-card');
+    const identifier = day ? '每日挑战 · ' + day : '第 ' + (index + 1) + ' 关' + (archived ? '旧版 · 最短 ' + level.masterPar + ' 步' : '');
+    button.setAttribute('aria-label', identifier + ' · ' + level.title);
     const preview = document.createElement('span');
     preview.className = 'master-preview';
     preview.style.setProperty('--preview-cols', String(level.cols));
@@ -2059,19 +2089,25 @@ function renderMasters() {
     }
     const info = document.createElement('span');
     const number = document.createElement('small');
-    number.textContent = '第 ' + (index + 1) + ' 关 · ' + (archived ? '旧版 · ' : '') + (isMasterExam(index + 1) ? '验收 · ' : '') + (level.turntables ? '转台工坊' : hasCargoPlates(level) ? '货物联锁' : level.interlocks ? '联锁工坊' : level.orders[0].count === 1 ? '单线解锁' : '双线重排');
+    const category = level.turntables ? '转台工坊' : hasCargoPlates(level) ? '货物联锁' : level.interlocks ? '联锁工坊' : level.orders[0].count === 1 ? '单线解锁' : '双线重排';
+    number.textContent = day ? identifier : '第 ' + (index + 1) + ' 关 · ' + (archived ? '旧版 · ' : '') + (isMasterExam(index + 1) ? '验收 · ' : '') + category;
     const title = document.createElement('strong');
     title.textContent = level.title;
-    const best = masterBest(index, archived);
     const summary = document.createElement('em');
-    const active = restoreSession(level, sessionData[stageSession(index, null, level, archived)]?.active);
-    if (active?.journal) {
-      const resume = document.createElement('em');
-      resume.className = 'master-resume-tag';
-      resume.textContent = '续玩 · 已走 ' + active.journal.length + ' 步';
-      info.append(resume);
+    if (draft) {
+      summary.className = 'master-resume-tag';
+      summary.textContent = '已走 ' + draft.moves.length + ' 步 · 剩余 ' + (level.stepLimit  - draft.moves.length) + ' 步';
+    } else {
+      const best = masterBest(index, archived);
+      const active = restoreSession(level, sessionData[stageSession(index, null, level, archived)]?.active);
+      if (active?.journal) {
+        const resume = document.createElement('em');
+        resume.className = 'master-resume-tag';
+        resume.textContent = '续玩 · 已走 ' + active.journal.length + ' 步';
+        info.append(resume);
+      }
+      summary.textContent = (level.masterPar ? '最短 ' + level.masterPar + ' 步 / ' : '') + (level.stepLimit ?? 0) + ' 步上限 · ' + (best ? '最佳 ' + best + ' 步' : '等待首通');
     }
-    summary.textContent = (level.masterPar ? '最短 ' + level.masterPar + ' 步 / ' : '') + (level.stepLimit ?? 0) + ' 步上限 · ' + (best ? '最佳 ' + best + ' 步' : '等待首通');
     info.append(number, title, summary);
     if (level.interlocks || level.turntables) {
       button.dataset.circuit = String(Boolean(level.interlocks));
@@ -2087,6 +2123,7 @@ function renderMasters() {
 
 function openMasters() {
   cancelDrag();
+  flushMasterSession();
   if (stageDialog.open) stageDialog.close();
   renderMasters();
   masterDialog.showModal();
@@ -2138,16 +2175,41 @@ function flushMasterSession() {
   }
 }
 
+function resolveMasterSession(key        , record               ) {
+  const index = Number(key.split(':')[1]) - 1;
+  for (const archived of [undefined, ...archivedFinals]) {
+    const level = archived === undefined ? authoredLevel(index) : archivedMasterLevel(index, archived);
+    if (!level || (record.status === 'playing' && key !== stageSession(index, null, level, archived))) continue;
+    if (restoreSession(level, record)) return { index, level, archived, record };
+  }
+  return undefined;
+}
+
 function findLatestMasterReview(book             ) {
   const candidates = Object.entries(book).filter(([key, slot]) => key.startsWith('stage:') && slot.latest)
     .sort(([, left], [, right]) => right.latest .savedAt - left.latest .savedAt);
   for (const [key, slot] of candidates) {
-    const index = Number(key.split(':')[1]) - 1;
-    for (const level of [authoredLevel(index), ...archivedFinals.map(final => archivedMasterLevel(index, final))]) {
-      if (level && restoreSession(level, slot.latest)) return { level, record: slot.latest  };
-    }
+    const saved = resolveMasterSession(key, slot.latest );
+    if (saved) return saved;
   }
   return undefined;
+}
+
+function unfinishedBoards(book             )                  {
+  const today = chinaDay();
+  const candidates = Object.entries(book).filter(([, slot]) => slot.active)
+    .sort(([, left], [, right]) => right.active .savedAt - left.active .savedAt);
+  return candidates.flatMap(([key, slot])                  => {
+    const draft = slot.active ;
+    if (key.startsWith('daily:')) {
+      const day = key.slice(6);
+      if (dailySerial(day) === null || day > today) return [];
+      const level = dailyForDay(day).level;
+      return restoreSession(level, draft) ? [{ index: levelIndex, level, day, draft }] : [];
+    }
+    const saved = resolveMasterSession(key, draft);
+    return saved ? [{ index: saved.index, level: saved.level, archived: saved.archived, draft }] : [];
+  });
 }
 
 function recordResult() {
@@ -3524,6 +3586,12 @@ dailyStart.addEventListener('click', () => {
   load(levelIndex, dailySelection);
 });
 document.getElementById('daily-copy') .addEventListener('click', () => { void shareDaily(dailySelection); });
+dailyDrafts.addEventListener('click', () => {
+  dailyDialog.close();
+  masterFilter = 'saved';
+  openMasters();
+  masterFilters.querySelector                   ('[data-filter="saved"]')?.focus();
+});
 dailyHistory.addEventListener('click', () => {
   const level = dailyForDay(dailySelection).level;
   const record = readSessionBook()[sessionId(0, dailySelection)]?.latest;
@@ -3551,7 +3619,7 @@ masterEntry.addEventListener('click', openMasters);
 for (const button of masterFilters.querySelectorAll                   ('button')) {
   button.addEventListener('click', () => {
     const filter = button.dataset.filter;
-    if (filter === 'all' || filter === 'slide' || filter === 'circuit' || filter === 'cargo' || filter === 'turn') { masterFilter = filter; renderMasters(); }
+    if (filter === 'all' || filter === 'saved' || filter === 'slide' || filter === 'circuit' || filter === 'cargo' || filter === 'turn') { masterFilter = filter; renderMasters(); }
   });
 }
 document.getElementById('map-master') .addEventListener('click', openMasters);
