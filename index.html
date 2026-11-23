@@ -198,6 +198,9 @@
     .review-release { justify-self: end; align-self: end; }
     .review-shipped { justify-self: center; align-self: center; color: #a2f7e6; font-size: 5cqw; }
     #review-info { display: block; text-align: center; color: #e6dafa; margin: 2.4cqw 0; }
+    #review-comparison { display: flex; gap: 1.25cqw; margin-bottom: 2.1cqw; }
+    #review-comparison button { flex: 1; min-width: 0; min-height: max(34px, 8.5cqw); padding: .65cqw 1cqw; font-size: clamp(11px, 2.85cqw, 14px); white-space: normal; }
+    #review-comparison button[aria-pressed='true'] { border-color: #c8adf1; color: #f4e7ff; background: #4b3b65; }
     .review-controls { display: flex; gap: 2.1cqw; align-items: center; }
     .review-controls button { min-width: 9.5cqw; min-height: 8.5cqw; }
     .review-controls input { flex: 1; min-width: 0; accent-color: #c8adf1; }
@@ -296,6 +299,11 @@
     <dialog id="review-dialog" aria-labelledby="review-title">
       <header><div><span class="eyebrow">SHIFT REVIEW</span><h2 id="review-title">局后复盘</h2></div><form method="dialog"><button type="submit" aria-label="关闭复盘">关闭</button></form></header>
       <p id="review-status" class="intro" role="status"></p>
+      <div id="review-comparison" role="group" aria-label="对照最近一局和个人最佳" hidden>
+        <button type="button" id="review-compare-latest" aria-pressed="false">最近一局</button>
+        <button type="button" id="review-compare-best" aria-pressed="false">个人最佳</button>
+        <button type="button" id="review-compare-difference" title="跳到两局第一次走法不同的位置">查看分岔</button>
+      </div>
       <div id="review-gates" aria-label="回放出口状态"></div>
       <div id="review-grid" aria-label="回放棋盘"></div>
       <strong id="review-info" aria-live="polite"></strong>
@@ -1241,6 +1249,17 @@ export function circuitTransitionSteps(level       , moves                      
   return changes;
 }
 
+export function firstReviewDifference(left                       , right                       ) {
+  const commonLength = Math.min(left.length, right.length);
+  for (let index = 0; index < commonLength; index++) {
+    const a = left[index];
+    const b = right[index];
+    if (a.id !== b.id || a.from.x !== b.from.x || a.from.y !== b.from.y ||
+        a.to?.x !== b.to?.x || a.to?.y !== b.to?.y || a.turn !== b.turn) return index + 1;
+  }
+  return left.length === right.length ? undefined : commonLength + 1;
+}
+
 export function reviewTrialAt(level       , moves                       , through        ) {
   if (!level.masterPar || !Number.isInteger(through) || through < 0 || through > moves.length) return undefined;
   const board = replayAt(level, moves, through);
@@ -1869,6 +1888,10 @@ const reviewPreviousCircuit = document.querySelector                   ('#review
 const reviewNextCircuit = document.querySelector                   ('#review-next-circuit') ;
 const reviewInfo = document.getElementById('review-info') ;
 const reviewStatus = document.getElementById('review-status') ;
+const reviewComparisonGroup = document.getElementById('review-comparison') ;
+const reviewCompareLatest = document.querySelector                   ('#review-compare-latest') ;
+const reviewCompareBest = document.querySelector                   ('#review-compare-best') ;
+const reviewCompareDifference = document.querySelector                   ('#review-compare-difference') ;
 const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
 const reviewHeading = document.getElementById('review-title') ;
 const reviewShare = document.querySelector                   ('#review-share') ;
@@ -1887,7 +1910,9 @@ const reviewAnalyze = document.querySelector                   ('#review-analyze
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
 const reviewLastLeg = document.querySelector                   ('#review-last-leg') ;
                                                          
-                                                                                                                                                      
+                                         
+                                                                                                                           
+                                                                                                                                                                                          
                                                                                                                                                                                                                                     
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
@@ -3189,13 +3214,25 @@ function paintReview(index        ) {
 function openReview() {
   if (game.status === 'playing' || !game.journal?.length || !game.level.masterPar) return;
   const source = { index: levelIndex, day: currentDaily };
-  beginReview(game.level, game.journal, game.status === 'won', { start: relayStart, allowsTrial: !relayToken, source });
+  const options = { start: relayStart, allowsTrial: !relayToken, source };
+  if (currentDaily && !relayToken) {
+    refreshDailyScores();
+    const latest = captureSession(game, elapsedPlay, Date.now());
+    const slot = readSessionBook()[sessionId(0, currentDaily)];
+    const best = dailyBestReplay(game.level, slot, dailyRecords[currentDaily]);
+    const comparison = dailyReviewComparison(latest, best, 'latest');
+    if (latest && comparison) {
+      beginDailyReview(game.level, latest, false, { ...options, comparison });
+      return;
+    }
+  }
+  beginReview(game.level, game.journal, game.status === 'won', options);
 }
 
 function beginReview(level       , moves              , won         , options                = {}) {
   if (reviewTrial) endReviewTrial(false);
   stopReviewPlayback();
-  const { start = 0, allowsTrial = false, returnDay, shared = false, bookmark } = options;
+  const { start = 0, allowsTrial = false, returnDay, shared = false, bookmark, comparison } = options;
   const dispatches = moves.flatMap((move, index) => move.to === null && index + 1 >= start ? [index + 1] : []);
   reviewEpoch++;
   const circuit = level.interlocks?.find(lock => lock.label === bookmark?.circuit);
@@ -3208,6 +3245,12 @@ function beginReview(level       , moves              , won         , options   
   }));
   reviewCircuitGroup.replaceChildren(...reviewCircuitButtons.map(({ button }) => button));
   reviewCircuitGroup.hidden = !reviewCircuitButtons.length;
+  reviewComparisonGroup.hidden = !comparison;
+  if (comparison) {
+    reviewCompareLatest.setAttribute('aria-pressed', String(comparison.selected === 'latest'));
+    reviewCompareBest.setAttribute('aria-pressed', String(comparison.selected === 'best'));
+    reviewCompareDifference.textContent = '第 ' + comparison.difference + ' 步分开';
+  }
   reviewHeading.textContent = shared ? '分享棋谱' : '局后复盘';
   const closeLabel = returnDay ? '返回挑战' : shared ? '返回游戏' : '关闭';
   reviewClose.textContent = closeLabel;
@@ -3228,7 +3271,7 @@ function beginReview(level       , moves              , won         , options   
     ? level.title + ' · ' + moves.length + ' 步 · ' + (won ? '已通关' : '未过关')
     : won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。'
       : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
-  paintReview(shared ? (bookmark?.step ?? start) : moves.length);
+  paintReview(bookmark?.step ?? (shared ? start : moves.length));
   if (!reviewDialog.open) reviewDialog.showModal();
 }
 
@@ -4152,22 +4195,54 @@ dailyDrafts.addEventListener('click', () => {
   openMasters();
   masterFilters.querySelector                   ('[data-filter="saved"]')?.focus();
 });
-function openDailyReview(best         ) {
-  refreshDailyScores();
-  const { level, par } = dailyForDay(dailySelection);
-  const slot = readSessionBook()[sessionId(0, dailySelection)];
-  const bestReplay = dailyBestReplay(level, slot, dailyRecords[dailySelection]);
-  const record = best ? bestReplay : slot?.latest;
-  if (!record || !restoreSession(level, record)) return;
-  dailyDialog.close();
-  beginReview(level, record.moves, record.status === 'won', { returnDay: dailySelection, allowsTrial: true, source: { index: levelIndex, day: dailySelection } });
+function beginDailyReview(level       , record               , best         , options               ) {
+  beginReview(level, record.moves, record.status === 'won', options);
   if (record.status === 'won') {
-    const title = record === bestReplay ? '个人最佳' : '最近一局';
-    reviewStatus.textContent = title + ' · ' + dailyString(dailyScore(record.seconds, record.moves.length, par));
+    const title = best ? '个人最佳' : '最近一局';
+    reviewStatus.textContent = title + ' · ' + dailyString(dailyScore(record.seconds, record.moves.length, level.masterPar ));
   }
+}
+
+function dailyReviewComparison(latest                           , best                           , selected                 )                                    {
+  if (!latest || !best || latest === best) return undefined;
+  const difference = firstReviewDifference(latest.moves, best.moves);
+  return difference === undefined ? undefined : { latest, best, difference, selected };
+}
+
+function openDailyReview(selectBest         ) {
+  refreshDailyScores();
+  const { level } = dailyForDay(dailySelection);
+  const slot = readSessionBook()[sessionId(0, dailySelection)];
+  const latest = restoreSession(level, slot?.latest) ? slot?.latest : undefined;
+  const best = dailyBestReplay(level, slot, dailyRecords[dailySelection]);
+  const record = selectBest ? best : latest;
+  if (!record) return;
+  const comparison = dailyReviewComparison(latest, best, selectBest ? 'best' : 'latest');
+  dailyDialog.close();
+  beginDailyReview(level, record, record === best, {
+    returnDay: dailySelection, allowsTrial: true, source: { index: levelIndex, day: dailySelection }, comparison
+  });
+}
+
+function switchDailyReview(selected                 ) {
+  const session = reviewSession;
+  const comparison = session?.comparison;
+  if (!reviewDialog.open || !session || !comparison || comparison.selected === selected) return;
+  const record = comparison[selected];
+  const bookmark = { step: Math.min(Number(reviewRange.value), record.moves.length), circuit: session.circuit?.label };
+  beginDailyReview(session.level, record, selected === 'best', {
+    source: session.source, returnDay: session.returnDay, allowsTrial: session.allowsTrial, bookmark,
+    comparison: { ...comparison, selected }
+  });
 }
 dailyHistory.addEventListener('click', () => openDailyReview(false));
 dailyBestHistory.addEventListener('click', () => openDailyReview(true));
+reviewCompareLatest.addEventListener('click', () => switchDailyReview('latest'));
+reviewCompareBest.addEventListener('click', () => switchDailyReview('best'));
+reviewCompareDifference.addEventListener('click', () => {
+  const session = reviewSession;
+  if (session?.comparison) seekReview(Math.min(session.comparison.difference, session.moves.length));
+});
 masterHistory.addEventListener('click', () => {
   if (!latestMasterReview) return;
   const { index, level, record } = latestMasterReview;
