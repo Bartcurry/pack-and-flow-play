@@ -200,6 +200,10 @@
     .review-controls { display: flex; gap: 2.1cqw; align-items: center; }
     .review-controls button { min-width: 9.5cqw; min-height: 8.5cqw; }
     .review-controls input { flex: 1; min-width: 0; accent-color: #c8adf1; }
+    .review-transport { display: grid; grid-template-columns: 1.35fr 1fr .85fr 1.35fr; gap: 1.65cqw; margin-top: 2cqw; }
+    .review-transport button, .review-transport select { min-width: 0; min-height: max(27px, 8.5cqw); padding: 0 .45cqw; font-size: clamp(10px, 2.8cqw, 14px); }
+    .review-transport select { border: 1px solid #5a7186; border-radius: 2cqw; background: #24384b; color: #f3f7fa; text-align: center; }
+    .review-transport select:focus-visible { outline: 2px solid #ffcc77; outline-offset: 2px; }
     .review-actions { display: flex; gap: 2.1cqw; }
     .review-actions button { flex: 1 1 0; min-width: 0; min-height: 9.1cqw; margin-top: 2.7cqw; padding: 1cqw 1.35cqw; white-space: normal; }
     #review-share-status:empty { display: none; }
@@ -281,6 +285,12 @@
       <div id="review-grid" aria-label="回放棋盘"></div>
       <strong id="review-info" aria-live="polite"></strong>
       <div class="review-controls"><button type="button" id="review-previous" aria-label="上一步">←</button><input type="range" id="review-range" min="0" value="0" aria-label="回放步数"><button type="button" id="review-next" aria-label="下一步">→</button></div>
+      <div class="review-transport" role="group" aria-label="棋谱播放">
+        <button type="button" id="review-previous-dispatch">上次发货</button>
+        <button type="button" id="review-play" class="primary">播放</button>
+        <select id="review-speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        <button type="button" id="review-next-dispatch">下次发货</button>
+      </div>
       <div class="review-actions">
         <button type="button" id="review-analyze">定位走偏点</button>
         <button type="button" class="primary" id="review-trial" hidden>从这步试走</button>
@@ -1775,11 +1785,16 @@ const reviewShareStatus = document.getElementById('review-share-status') ;
 const reviewRange = document.querySelector                  ('#review-range') ;
 const reviewPrevious = document.querySelector                   ('#review-previous') ;
 const reviewNext = document.querySelector                   ('#review-next') ;
+const reviewPlay = document.querySelector                   ('#review-play') ;
+const reviewSpeed = document.querySelector                   ('#review-speed') ;
+const reviewPreviousDispatch = document.querySelector                   ('#review-previous-dispatch') ;
+const reviewNextDispatch = document.querySelector                   ('#review-next-dispatch') ;
+let reviewPlayback                    ;
 const reviewAnalyze = document.querySelector                   ('#review-analyze') ;
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
                                                          
                                                                                                                            
-                                                                                                                              
+                                                                                                                                                    
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
@@ -2919,6 +2934,9 @@ function paintReview(index        ) {
   reviewRange.setAttribute('aria-valuetext', index + ' / ' + moves.length + ' 步');
   reviewPrevious.disabled = index <= reviewSession.start;
   reviewNext.disabled = index >= moves.length;
+  reviewPreviousDispatch.disabled = !reviewSession.dispatches.some(step => step < index);
+  reviewNextDispatch.disabled = !reviewSession.dispatches.some(step => step > index);
+  updateReviewPlayback();
 
   const nodes                = [];
   for (let row = 0; row < level.rows; row++) {
@@ -3012,9 +3030,11 @@ function openReview() {
 
 function beginReview(level       , moves              , won         , options                = {}) {
   if (reviewTrial) endReviewTrial(false);
+  stopReviewPlayback();
   const { start = 0, allowsTrial = false, returnDay, shared = false } = options;
+  const dispatches = moves.flatMap((move, index) => move.to === null && index + 1 >= start ? [index + 1] : []);
   reviewEpoch++;
-  reviewSession = { ...options, level, moves: [...moves], won, start, allowsTrial };
+  reviewSession = { ...options, level, moves: [...moves], dispatches, won, start, allowsTrial };
   reviewHeading.textContent = shared ? '分享棋谱' : '局后复盘';
   const closeLabel = returnDay ? '返回挑战' : shared ? '返回游戏' : '关闭';
   reviewClose.textContent = closeLabel;
@@ -3055,6 +3075,7 @@ function startReviewTrial() {
   const start = Number(reviewRange.value);
   const board = reviewTrialAt(session.level, session.moves, start);
   if (!board) return;
+  stopReviewPlayback();
   flushMasterSession();
   const message = reviewAnalyze.disabled ? '拖动进度条查看原局，或重新定位走偏点。' : reviewStatus.textContent ?? '';
   reviewTrial = { session, start, original: game, training: practice, message };
@@ -3127,11 +3148,66 @@ reviewButton.addEventListener('click', openReview);
 reviewTrialButton.addEventListener('click', startReviewTrial);
 reviewShare.addEventListener('click', () => { void copyReviewLink(); });
 reviewLinkField.addEventListener('focus', () => reviewLinkField.select());
-reviewRange.addEventListener('input', () => paintReview(Number(reviewRange.value)));
-reviewPrevious.addEventListener('click', () => paintReview(Number(reviewRange.value) - 1));
-reviewNext.addEventListener('click', () => paintReview(Number(reviewRange.value) + 1));
+function updateReviewPlayback() {
+  const playing = reviewPlayback !== undefined;
+  const atEnd = reviewSession && Number(reviewRange.value) >= reviewSession.moves.length;
+  const label = playing ? '暂停' : atEnd ? '重播' : '播放';
+  if (reviewPlay.textContent !== label) reviewPlay.textContent = label;
+  reviewPlay.disabled = reviewAnalyze.disabled;
+  const speech = playing ? 'off' : 'polite';
+  if (reviewInfo.getAttribute('aria-live') !== speech) reviewInfo.setAttribute('aria-live', speech);
+}
+
+function stopReviewPlayback() {
+  if (reviewPlayback !== undefined) window.clearInterval(reviewPlayback);
+  reviewPlayback = undefined;
+  updateReviewPlayback();
+}
+
+function startReviewPlayback() {
+  const session = reviewSession;
+  if (!reviewDialog.open || document.hidden || !session || reviewAnalyze.disabled) return;
+  stopReviewPlayback();
+  if (Number(reviewRange.value) >= session.moves.length) paintReview(session.start);
+  reviewPlayback = window.setInterval(() => {
+    if (!reviewDialog.open || document.hidden || reviewSession !== session) {
+      stopReviewPlayback();
+      return;
+    }
+    const step = Math.min(session.moves.length, Number(reviewRange.value) + 1);
+    if (step >= session.moves.length) stopReviewPlayback();
+    paintReview(step);
+  }, 360 / (Number(reviewSpeed.value) || 1));
+  updateReviewPlayback();
+}
+
+function seekReview(step        ) {
+  stopReviewPlayback();
+  paintReview(step);
+}
+
+function jumpToDispatch(direction        ) {
+  if (!reviewSession) return;
+  const current = Number(reviewRange.value);
+  const target = direction < 0
+    ? reviewSession.dispatches.findLast(index => index < current)
+    : reviewSession.dispatches.find(index => index > current);
+  if (target !== undefined) seekReview(target);
+}
+
+reviewRange.addEventListener('input', () => seekReview(Number(reviewRange.value)));
+reviewPrevious.addEventListener('click', () => seekReview(Number(reviewRange.value) - 1));
+reviewNext.addEventListener('click', () => seekReview(Number(reviewRange.value) + 1));
+reviewPlay.addEventListener('click', () => {
+  if (reviewPlayback === undefined) startReviewPlayback();
+  else stopReviewPlayback();
+});
+reviewSpeed.addEventListener('change', () => { if (reviewPlayback !== undefined) startReviewPlayback(); });
+reviewPreviousDispatch.addEventListener('click', () => jumpToDispatch(-1));
+reviewNextDispatch.addEventListener('click', () => jumpToDispatch(1));
 reviewDialog.addEventListener('close', () => {
   if (reviewDialog.open) return;
+  stopReviewPlayback();
   reviewEpoch++;
   const day = reviewSession?.returnDay;
   if (day) showDaily(day);
@@ -3140,8 +3216,10 @@ reviewDialog.addEventListener('close', () => {
 reviewAnalyze.addEventListener('click', async () => {
   const session = reviewSession;
   if (!session) return;
+  stopReviewPlayback();
   const epoch = ++reviewEpoch;
   reviewAnalyze.disabled = true;
+  updateReviewPlayback();
   reviewStatus.textContent = '正在比较各步的剩余预算…';
   try {
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -3153,7 +3231,10 @@ reviewAnalyze.addEventListener('click', async () => {
   } catch {
     if (epoch === reviewEpoch && reviewDialog.open) reviewStatus.textContent = '这局未能分析，可手动查看棋谱。';
   } finally {
-    if (epoch === reviewEpoch) reviewAnalyze.disabled = false;
+    if (epoch === reviewEpoch) {
+      reviewAnalyze.disabled = false;
+      updateReviewPlayback();
+    }
   }
 });
 
@@ -3879,7 +3960,12 @@ masterHistory.addEventListener('click', () => {
   beginReview(level, record.moves, record.status === 'won', { allowsTrial: true, source: { index, day: null } });
 });
 window.addEventListener('pagehide', flushMasterSession);
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushMasterSession(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopReviewPlayback();
+    flushMasterSession();
+  }
+});
 dailyLinkField.addEventListener('focus', () => dailyLinkField.select());
 resultShare.addEventListener('click', () => {
   if (currentDaily) showDaily(currentDaily);
