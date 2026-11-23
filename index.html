@@ -210,6 +210,8 @@
     #review-circuit-details { display: grid; grid-template-columns: 6.8cqw minmax(0,1fr); align-items: center; gap: 1.5cqw; margin-top: 1.35cqw; padding: 1.25cqw 1.6cqw; border: 1px solid #54778a; border-left: 3px solid var(--circuit-color); border-radius: 1.8cqw; background: #192f41; color: #e5edf5; font-size: clamp(10px, 2.75cqw, 14px); }
     #review-circuit-details .circuit-detail-row { flex-wrap: wrap; column-gap: 1.35cqw; }
     #review-circuit-details .circuit-detail-row > span { border-left: 0; padding-left: 0; }
+    #review-circuit-jumps { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1.25cqw; margin-top: 1.35cqw; }
+    #review-circuit-jumps button { min-width: 0; min-height: max(32px, 8.5cqw); padding: .65cqw 1.1cqw; font-size: clamp(11px, 2.8cqw, 14px); }
     .review-circuit-focus { z-index: 1; border-radius: 1.25cqw; box-shadow: inset 0 0 0 1.5px var(--circuit-color); pointer-events: none; }
     #review-gates span { box-shadow: inset 0 0 0 1.5px var(--review-exit-accent, transparent); }
     .review-actions { display: flex; gap: 2.1cqw; }
@@ -307,6 +309,10 @@
           <div id="review-circuit-outputs" class="circuit-detail-row"></div>
         </div>
       </section>
+      <div id="review-circuit-jumps" role="group" aria-label="跳转到线路通断或出口、闸门开关变化" hidden>
+        <button type="button" id="review-previous-circuit">上次开关变化</button>
+        <button type="button" id="review-next-circuit">下次开关变化</button>
+      </div>
       <div class="review-actions">
         <button type="button" id="review-analyze">定位走偏点</button>
         <button type="button" class="primary" id="review-trial" hidden>从这步试走</button>
@@ -1190,10 +1196,11 @@ export function readDailyRecords(value         )               {
 }
 
 
-export function replayAt(level       , moves                       , through        ) {
+export function replayAt(level       , moves                       , through        , visit                                      ) {
   const board = createGame(level);
   board.journal = undefined;
-  for (const move of moves.slice(0, through)) {
+  visit?.(board, 0);
+  for (const [index, move] of moves.slice(0, through).entries()) {
     const item = board.items.find(item => item.id === move.id);
     if (!item || item.origin.x !== move.from.x || item.origin.y !== move.from.y) throw Error('Invalid review move');
     if (move.turn) {
@@ -1202,8 +1209,27 @@ export function replayAt(level       , moves                       , through    
       const outcome = move.to ? dragToward(board, move.id, move.to) : ship(board, move.id);
       if (move.to ? outcome !== 'slid' : outcome !== 'packed') throw Error('Invalid review action');
     }
+    visit?.(board, index + 1);
   }
   return board;
+}
+
+export function circuitTransitionSteps(level       , moves                       , start = 0) {
+  const locks = level.interlocks ?? [];
+  const changes = new Map                     (locks.map(lock => [lock, []]));
+  if (!locks.length) return changes;
+  const previous = new Map                   ();
+  replayAt(level, moves, moves.length, (board, step) => {
+    if (step < start) return;
+    for (const [lock, steps] of changes) {
+      const state = [interlockActive(board, lock),
+        ...lock.shutters.map(point => shutterOpen(board, point.x, point.y)),
+        ...lock.exits.map(column => exitOpen(board, column))].join(',');
+      if (step > start && state !== previous.get(lock)) steps.push(step);
+      previous.set(lock, state);
+    }
+  });
+  return changes;
 }
 
 export function reviewTrialAt(level       , moves                       , through        ) {
@@ -1803,6 +1829,9 @@ const reviewCircuitPanel               = {
   outputs: document.getElementById('review-circuit-outputs') 
 };
 let reviewCircuitButtons                  = [];
+const reviewCircuitNavigation = document.getElementById('review-circuit-jumps') ;
+const reviewPreviousCircuit = document.querySelector                   ('#review-previous-circuit') ;
+const reviewNextCircuit = document.querySelector                   ('#review-next-circuit') ;
 const reviewInfo = document.getElementById('review-info') ;
 const reviewStatus = document.getElementById('review-status') ;
 const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
@@ -1822,7 +1851,7 @@ const reviewAnalyze = document.querySelector                   ('#review-analyze
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
                                                          
                                                                                                                            
-                                                                                                                                                                         
+                                                                                                                                                                                                                  
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
@@ -2966,6 +2995,14 @@ function paintReview(index        ) {
   const viewed = replayAt(level, moves, index);
   for (const [slot, lock] of locks.entries()) updateCircuitButton(viewed, lock, reviewCircuitButtons[slot], circuit === lock);
   updateCircuitPanel(reviewCircuitPanel, viewed, circuit);
+  reviewCircuitNavigation.hidden = !circuit;
+  const circuitSteps = circuit ? reviewSession.circuitSteps?.get(circuit) : undefined;
+  const earlier = adjacentReviewStep(circuitSteps, index, -1);
+  const later = adjacentReviewStep(circuitSteps, index, 1);
+  reviewPreviousCircuit.disabled = earlier === undefined;
+  reviewNextCircuit.disabled = later === undefined;
+  reviewPreviousCircuit.title = earlier === undefined ? '之前没有开关变化' : '跳到第 ' + earlier + ' 步';
+  reviewNextCircuit.title = later === undefined ? '之后没有开关变化' : '跳到第 ' + later + ' 步';
   const move = moves[index - 1];
   reviewRange.value = String(index);
   reviewRange.setAttribute('aria-valuetext', index + ' / ' + moves.length + ' 步');
@@ -3093,6 +3130,7 @@ function beginReview(level       , moves              , won         , options   
   reviewSession = session;
   reviewCircuitButtons = (level.interlocks ?? []).map(lock => makeCircuitButton(lock, reviewCircuitPanel.details.id, () => {
     session.circuit = session.circuit === lock ? undefined : lock;
+    if (session.circuit) session.circuitSteps ??= circuitTransitionSteps(session.level, session.moves, session.start);
     paintReview(Number(reviewRange.value));
   }));
   reviewCircuitGroup.replaceChildren(...reviewCircuitButtons.map(({ button }) => button));
@@ -3250,13 +3288,18 @@ function seekReview(step        ) {
   paintReview(step);
 }
 
-function jumpToDispatch(direction        ) {
-  if (!reviewSession) return;
-  const current = Number(reviewRange.value);
-  const target = direction < 0
-    ? reviewSession.dispatches.findLast(index => index < current)
-    : reviewSession.dispatches.find(index => index > current);
+function adjacentReviewStep(steps                               , current        , direction        ) {
+  return direction < 0 ? steps?.findLast(index => index < current) : steps?.find(index => index > current);
+}
+
+function jumpToReviewStep(steps                               , direction        ) {
+  const target = adjacentReviewStep(steps, Number(reviewRange.value), direction);
   if (target !== undefined) seekReview(target);
+}
+
+function jumpToCircuitTransition(direction        ) {
+  const circuit = reviewSession?.circuit;
+  if (circuit) jumpToReviewStep(reviewSession?.circuitSteps?.get(circuit), direction);
 }
 
 reviewRange.addEventListener('input', () => seekReview(Number(reviewRange.value)));
@@ -3267,8 +3310,10 @@ reviewPlay.addEventListener('click', () => {
   else stopReviewPlayback();
 });
 reviewSpeed.addEventListener('change', () => { if (reviewPlayback !== undefined) startReviewPlayback(); });
-reviewPreviousDispatch.addEventListener('click', () => jumpToDispatch(-1));
-reviewNextDispatch.addEventListener('click', () => jumpToDispatch(1));
+reviewPreviousDispatch.addEventListener('click', () => jumpToReviewStep(reviewSession?.dispatches, -1));
+reviewNextDispatch.addEventListener('click', () => jumpToReviewStep(reviewSession?.dispatches, 1));
+reviewPreviousCircuit.addEventListener('click', () => jumpToCircuitTransition(-1));
+reviewNextCircuit.addEventListener('click', () => jumpToCircuitTransition(1));
 reviewDialog.addEventListener('close', () => {
   if (reviewDialog.open) return;
   stopReviewPlayback();
