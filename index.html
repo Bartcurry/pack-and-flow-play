@@ -226,7 +226,7 @@
     #relay-message:empty { display: none; }
     #resume-status { color: #c8f3e0; border: 1px solid #557d79; background: #294651; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 800; border-radius: 1.2cqw; padding: .48cqw 1.1cqw; pointer-events: none; }
     .session-history { margin: 0 0 2cqw; color: #e5d4ff; background: #443853; border-color: #7c6494; }
-    #daily-history { margin: 2cqw 0 0; }
+    #daily-history, #daily-best-history { margin: 2cqw 0 0; }
     .master-card .master-resume-tag { color: #b3f7dd; font-weight: 850; }
     #rotation-dock { position: absolute; inset: auto 5.55% 6.65%; height: 5%; display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 2cqw; }
     #rotation-dock span { display: grid; place-content: center; color: #e5d6f6; border: 1px solid #665783; border-radius: 2cqw; background: #39354f; text-align: center; font-size: clamp(9px, 2.75cqw, 14px); line-height: 1.2; }
@@ -280,7 +280,8 @@
       </section>
       <p class="intro">每日只出终局级联锁题，无道具。通关一星，比最短解多一步以内两星，走到最短解三星；同用步才比较时间。</p>
       <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
-      <button type="button" class="wide session-history" id="daily-history" hidden>复盘此日最近一局</button>
+      <button type="button" class="wide session-history" id="daily-history" hidden>复盘最近一局</button>
+      <button type="button" class="wide session-history" id="daily-best-history" hidden>复盘个人最佳</button>
       <button type="button" class="wide session-history" id="daily-drafts" hidden>查看未完局</button>
       <input id="daily-link" class="daily-link" type="url" readonly hidden aria-label="可复制的挑战链接"><p id="daily-share-status" class="intro" role="status"></p>
     </dialog>
@@ -1474,11 +1475,12 @@ export async function diagnoseReview(level       , moves                       ,
 
 
                                                                                                                              
-                                                                             
+                                                                                                   
                                                       
 export const SESSION_KEY = 'pack-flow.session-book.v1';
 const DRAFT_LIMIT = 24;
 const REPLAY_LIMIT = 24;
+const DAILY_BEST_REPLAY_LIMIT = 24;
 export const REPLAY_MOVE_LIMIT = 200;
 
 export function sessionId(index        , day               , edition         ) {
@@ -1523,7 +1525,8 @@ export function sessionBook(value         )              {
     if (!/^(stage:[1-9]\d{0,14}(?::1-\d+-[a-z0-9]+)?|daily:\d{4}-\d{2}-\d{2})$/.test(key) || !raw || typeof raw !== 'object') continue;
     const active = validSession(raw.active) && raw.active.status === 'playing' ? raw.active : undefined;
     const latest = validSession(raw.latest) && raw.latest.status !== 'playing' ? raw.latest : undefined;
-    if (active || latest) entries.push([key, { active, latest }]);
+    const best = key.startsWith('daily:') && validSession(raw.best) && raw.best.status === 'won' ? raw.best : undefined;
+    if (active || latest || best) entries.push([key, { active, latest, best }]);
   }
   const retain = (field                   , limit        ) => new Set(entries
     .filter(([, slot]) => slot[field])
@@ -1532,11 +1535,13 @@ export function sessionBook(value         )              {
     .map(([key]) => key));
   const drafts = retain('active', DRAFT_LIMIT);
   const replays = retain('latest', REPLAY_LIMIT);
+  const bestReplays = retain('best', DAILY_BEST_REPLAY_LIMIT);
   const kept                          = [];
   for (const [key, slot] of entries) {
     const active = drafts.has(key) ? slot.active : undefined;
     const latest = replays.has(key) ? slot.latest : undefined;
-    if (active || latest) kept.push([key, { active, latest }]);
+    const best = bestReplays.has(key) ? slot.best : undefined;
+    if (active || latest || best) kept.push([key, best ? { active, latest, best } : { active, latest }]);
   }
   return Object.fromEntries(kept);
 }
@@ -1561,15 +1566,17 @@ export function restoreSession(level       , value         )                   {
   }
 }
 
-export function putSession(book             , key        , record               ) {
+export function putSession(book             , key        , record               , best                ) {
   const previous = book[key] ?? {};
-  const slot              = record.status === 'playing' ? { ...previous, active: record } : { latest: record };
+  const slot              = record.status === 'playing'
+    ? { ...previous, active: record }
+    : { latest: record, best: best ?? previous.best };
   return sessionBook({ ...book, [key]: slot });
 }
 
 export function discardDraft(book             , key        ) {
-  const { latest } = book[key] ?? {};
-  return sessionBook({ ...book, [key]: { latest } });
+  const { latest, best } = book[key] ?? {};
+  return sessionBook({ ...book, [key]: { latest, best } });
 }
 
 
@@ -1904,7 +1911,8 @@ const dailyComing = document.getElementById('daily-coming') ;
 const dailyLinkField = document.querySelector                  ('#daily-link') ;
 const dailyShareStatus = document.getElementById('daily-share-status') ;
 const oldDailyRecords = readDailyRecords(stored('pack-flow.daily-master-records', {}));
-const dailyRecords = { ...Object.fromEntries(Object.entries(oldDailyRecords).filter(([day]) => day < catalog.dailySeriesStart)), ...readDailyRecords(stored('pack-flow.daily-switch-records', {})) };
+const DAILY_RECORDS_KEY = 'pack-flow.daily-switch-records';
+const dailyRecords = { ...Object.fromEntries(Object.entries(oldDailyRecords).filter(([day]) => day < catalog.dailySeriesStart)), ...readDailyRecords(stored(DAILY_RECORDS_KEY, {})) };
 const startingQuery = new URL(location.href).searchParams;
 const sharedDay = startingQuery.get('daily');
 let currentDaily = sharedDay !== null && dailySerial(sharedDay) !== null && sharedDay <= chinaDay() ? sharedDay : null;
@@ -1955,6 +1963,7 @@ const relayLink = document.querySelector                  ('#relay-link') ;
 const relayMessage = document.getElementById('relay-message') ;
 const dailyStart = document.querySelector                   ('#daily-start') ;
 const dailyHistory = document.querySelector                   ('#daily-history') ;
+const dailyBestHistory = document.querySelector                   ('#daily-best-history') ;
 const dailyDrafts = document.querySelector                   ('#daily-drafts') ;
 const masterHistory = document.querySelector                   ('#master-history') ;
 let latestMasterReview                                                                    ;
@@ -2229,7 +2238,23 @@ function changeDailyMonth(delta        ) {
   }
 }
 
+function refreshDailyScores() {
+  for (const [day, score] of Object.entries(readDailyRecords(stored(DAILY_RECORDS_KEY, {})))) {
+    dailyRecords[day] = bestDaily(dailyRecords[day], score);
+  }
+}
+
+function matchesDailyScore(trace                           , score                        )                         {
+  return Boolean(trace?.status === 'won' && score && trace.moves.length === score.moves &&
+    Math.round(trace.seconds * 10) / 10 === score.seconds);
+}
+
+function dailyBestReplay(level       , slot                         , score                        ) {
+  return [slot?.latest, slot?.best].find(trace => matchesDailyScore(trace, score) && restoreSession(level, trace));
+}
+
 function renderDaily() {
+  refreshDailyScores();
   const today = chinaDay();
   dailyDate.textContent = dailySelection === today ? '今天 · ' + dailySelection : dailySelection;
   const record = dailyRecords[dailySelection];
@@ -2243,7 +2268,11 @@ function renderDaily() {
     return day <= today && dailySerial(day) !== null;
   });
   dailyStart.textContent = draft ? '继续挑战 · 已走 ' + draft.journal .length + ' 步 →' : '开始挑战 →';
-  dailyHistory.hidden = !restoreSession(challenge.level, slot?.latest);
+  const bestReplay = dailyBestReplay(challenge.level, slot, record);
+  const latestIsBest = bestReplay !== undefined && bestReplay === slot?.latest;
+  dailyHistory.hidden = !latestIsBest && !restoreSession(challenge.level, slot?.latest);
+  dailyHistory.textContent = latestIsBest ? '复盘个人最佳' : '复盘最近一局';
+  dailyBestHistory.hidden = bestReplay === undefined || latestIsBest;
   dailyBest.textContent = record ? '个人最佳：' + dailyString(record) : challenge.level.title + ' · 最短 ' + challenge.par + ' 步 · 上限 ' + challenge.level.stepLimit + ' 步';
   const bank = dailyBankOn(dailySelection, dailySchedule.banks);
   dailyEdition.textContent = (bank?.title ?? '历史题库') + ' · ' + (challenge.level.walls?.length ? '固定封格 · ' : '') + '无道具，仅容错两步';
@@ -2432,7 +2461,14 @@ function storeMasterSession(force = false) {
   const record = captureSession(game, elapsedPlay, Date.now());
   if (!record) return;
   const key = stageSession(levelIndex, currentDaily, game.level, archivedMaster);
-  writeSessionBook(putSession(readSessionBook(), key, record));
+  const book = readSessionBook();
+  let best                           ;
+  if (currentDaily && record.status !== 'playing') {
+    const score = dailyRecords[currentDaily];
+    best = dailyBestReplay(game.level, book[key], score);
+    if (!best && matchesDailyScore(record, score)) best = record;
+  }
+  writeSessionBook(putSession(book, key, record, best));
   if (game.journal.length !== lastStoredMoves) resumeBoard = false;
   lastStoredMoves = game.journal.length;
   lastStoredSeconds = elapsedPlay;
@@ -2488,7 +2524,7 @@ function recordResult() {
   if (reviewTrial || game.status === recorded) return;
   recorded = game.status;
   if (relayToken) { if (game.status === 'won') sound.play('win'); return; }
-  storeMasterSession(true);
+  if (currentDaily) refreshDailyScores();
   if (!currentDaily && !practice) {
     try { localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1)); } catch {}
   }
@@ -2499,7 +2535,7 @@ function recordResult() {
       const best = bestDaily(previousScore, finishedDaily);
       newDailyRecord = best !== previousScore;
       dailyRecords[currentDaily] = best;
-      try { localStorage.setItem('pack-flow.daily-switch-records', JSON.stringify(dailyRecords)); } catch {}
+      try { localStorage.setItem(DAILY_RECORDS_KEY, JSON.stringify(dailyRecords)); } catch {}
     } else if (!practice) {
       earnedStar = clearStage(progress, levelIndex);
       if (earnedStar) saveProgress();
@@ -2514,6 +2550,7 @@ function recordResult() {
     sound.play('win');
     scatter({ x: 360, y: 566 }, MINT, 24, 196);
   }
+  storeMasterSession(true);
 }
 
 function updateSoundButton() {
@@ -4115,13 +4152,22 @@ dailyDrafts.addEventListener('click', () => {
   openMasters();
   masterFilters.querySelector                   ('[data-filter="saved"]')?.focus();
 });
-dailyHistory.addEventListener('click', () => {
-  const level = dailyForDay(dailySelection).level;
-  const record = readSessionBook()[sessionId(0, dailySelection)]?.latest;
+function openDailyReview(best         ) {
+  refreshDailyScores();
+  const { level, par } = dailyForDay(dailySelection);
+  const slot = readSessionBook()[sessionId(0, dailySelection)];
+  const bestReplay = dailyBestReplay(level, slot, dailyRecords[dailySelection]);
+  const record = best ? bestReplay : slot?.latest;
   if (!record || !restoreSession(level, record)) return;
   dailyDialog.close();
   beginReview(level, record.moves, record.status === 'won', { returnDay: dailySelection, allowsTrial: true, source: { index: levelIndex, day: dailySelection } });
-});
+  if (record.status === 'won') {
+    const title = record === bestReplay ? '个人最佳' : '最近一局';
+    reviewStatus.textContent = title + ' · ' + dailyString(dailyScore(record.seconds, record.moves.length, par));
+  }
+}
+dailyHistory.addEventListener('click', () => openDailyReview(false));
+dailyBestHistory.addEventListener('click', () => openDailyReview(true));
 masterHistory.addEventListener('click', () => {
   if (!latestMasterReview) return;
   const { index, level, record } = latestMasterReview;
