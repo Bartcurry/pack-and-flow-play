@@ -171,7 +171,10 @@
     .review-controls { display: flex; gap: 2.1cqw; align-items: center; }
     .review-controls button { min-width: 9.5cqw; min-height: 8.5cqw; }
     .review-controls input { flex: 1; min-width: 0; accent-color: #c8adf1; }
-    #resume-status { position: absolute; top: 27.25%; right: 5.55%; color: #c8f3e0; border: 1px solid #557d79; background: #294651; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 800; border-radius: 1.2cqw; padding: .48cqw 1.1cqw; pointer-events: none; }
+    .run-flags { position: absolute; top: 27.15%; right: 5.55%; display: flex; align-items: center; gap: 1.15cqw; }
+    #relay-open { min-height: 5.65cqw; color: #f2dcff; border-color: #815fac; background: #503e64; padding: .2cqw 1.2cqw; font-size: clamp(9px, 2.4cqw, 14px); }
+    #relay-message:empty { display: none; }
+    #resume-status { color: #c8f3e0; border: 1px solid #557d79; background: #294651; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 800; border-radius: 1.2cqw; padding: .48cqw 1.1cqw; pointer-events: none; }
     .session-history { margin: 0 0 2cqw; color: #e5d4ff; background: #443853; border-color: #7c6494; }
     #daily-history { margin: 2cqw 0 0; }
     .master-card .master-resume-tag { color: #b3f7dd; font-weight: 850; }
@@ -185,7 +188,7 @@
     <p id="keyboard-help" class="sr-only">键盘：按 E 或回车选择下一件货，Q 选择上一件，方向键移动，H 查看提示。</p>
     <div class="quick" aria-label="试玩设置"><button id="daily" type="button" aria-label="每日挑战">挑战</button><button id="levels" type="button">关卡</button><button id="shop" type="button" aria-label="梦想小店与图鉴">小店</button><button id="help" type="button" aria-label="玩法说明">帮助</button><button id="sound" type="button" aria-pressed="true">声音</button></div>
     <p id="status" class="sr-only" role="status">正在加载关卡。</p>
-    <span id="resume-status" aria-live="polite" hidden></span>
+    <div class="run-flags"><button id="relay-open" type="button" aria-label="分享当前残局" hidden>接力</button><span id="resume-status" aria-live="polite" hidden></span></div>
     <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button><button class="secondary" id="result-review" type="button" hidden>复盘这局</button><button class="secondary" id="result-share" type="button" hidden>分享本期挑战</button></section>
     <div id="master-rules" role="status" hidden></div>
     <nav class="tools" aria-label="救场道具"><button id="magnet" type="button" title="吸走最多三件匹配货物">磁力</button><button id="shuffle" type="button" title="刷新订单并清理暂存">刷新</button><button id="expand" type="button" title="把暂存扩至四格">扩容</button></nav>
@@ -199,6 +202,14 @@
       <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
       <button type="button" class="wide session-history" id="daily-history" hidden>复盘此日最近一局</button>
       <input id="daily-link" class="daily-link" type="url" readonly hidden aria-label="可复制的挑战链接"><p id="daily-share-status" class="intro" role="status"></p>
+    </dialog>
+    <dialog id="relay-dialog" aria-labelledby="relay-title">
+      <header><div><span class="eyebrow">PASS THE PUZZLE</span><h2 id="relay-title">分享残局</h2></div><form method="dialog"><button type="submit" aria-label="关闭残局分享">关闭</button></form></header>
+      <section class="daily-hero"><h3>就从这一步接手</h3><p id="relay-info"></p></section>
+      <p class="intro">朋友点开链接会看到你现在的棋盘，但接力不计入星星、图鉴和正式成绩。刷新或重玩会回到链接里的起点；要继续传给别人，就复制新的残局链接。</p>
+      <input id="relay-link" class="daily-link" type="url" readonly aria-label="残局接力链接">
+      <button id="relay-copy" class="primary wide" type="button">复制接力链接</button>
+      <p id="relay-message" class="intro" role="status"></p>
     </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title">
       <header><div><span class="eyebrow">SHIFT REVIEW</span><h2 id="review-title">局后复盘</h2></div><form method="dialog"><button type="submit" aria-label="关闭复盘">关闭</button></form></header>
@@ -1210,6 +1221,62 @@ export function discardDraft(book             , key        ) {
 }
 
 
+const relayDirections = [[0, 0], [0, -1], [1, 0], [0, 1], [-1, 0]];
+const RELAY_MOVE_LIMIT = 160;
+
+function base64URL(input        ) {
+  return btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function encodeRelay(level       , journal                       ) {
+  if (!level.masterPar || !level.stepLimit || !journal.length || journal.length >= level.stepLimit || journal.length > RELAY_MOVE_LIMIT) return undefined;
+  const bytes           = [];
+  for (const move of journal) {
+    const index = level.items.findIndex(item => item.id === move.id);
+    if (index < 0 || index >= 51) return undefined;
+    const target = move.to;
+    const direction = target ? relayDirections.findIndex(([dx, dy], option) => option > 0 && move.from.x + dx === target.x && move.from.y + dy === target.y) : 0;
+    if (direction < 0) return undefined;
+    bytes.push(String.fromCharCode(index * relayDirections.length + direction));
+  }
+  return 'r1.' + boardStamp(level) + '.' + base64URL(bytes.join(''));
+}
+
+export function decodeRelay(level       , raw               )                   {
+  if (!raw || raw.length > 256 || !level.masterPar || !level.stepLimit) return undefined;
+  const match = /^r1\.([a-z0-9-]{1,32})\.([A-Za-z0-9_-]+)$/.exec(raw);
+  if (!match || match[1] !== boardStamp(level)) return undefined;
+  let bytes        ;
+  try { bytes = atob(match[2].replace(/-/g, '+').replace(/_/g, '/')); } catch { return undefined; }
+  if (bytes.length > RELAY_MOVE_LIMIT || bytes.length >= level.stepLimit || base64URL(bytes) !== match[2]) return undefined;
+  const board = createGame(level);
+  for (const byte of bytes) {
+    const code = byte.charCodeAt(0);
+    const spec = level.items[Math.floor(code / relayDirections.length)];
+    const item = spec && board.items.find(piece => piece.id === spec.id);
+    if (!item || board.status !== 'playing') return undefined;
+    const direction = code % relayDirections.length;
+    if (direction === 0) {
+      if (ship(board, item.id) !== 'packed') return undefined;
+    } else {
+      const [dx, dy] = relayDirections[direction];
+      if (dragToward(board, item.id, { x: item.origin.x + dx, y: item.origin.y + dy }) !== 'slid') return undefined;
+    }
+  }
+  if (board.status !== 'playing' || !board.movesLeft || board.journal?.length !== bytes.length) return undefined;
+  board.events = [];
+  return board;
+}
+
+export function relayAddress(address        , stage        , day               , token        ) {
+  const link = new URL(address);
+  link.search = '';
+  link.searchParams.set(day ? 'daily' : 'stage', day ?? String(stage));
+  link.hash = 'relay=' + token;
+  return link.href;
+}
+
+
 export function guideCue(game      ) {
   if (game.status !== 'playing') return null;
   const late = game.items.find(item => item.id === 'practice-purple');
@@ -1338,7 +1405,7 @@ const reviewRange = document.querySelector                  ('#review-range') ;
 const reviewPrevious = document.querySelector                   ('#review-previous') ;
 const reviewNext = document.querySelector                   ('#review-next') ;
 const reviewAnalyze = document.querySelector                   ('#review-analyze') ;
-let reviewSession                                                                 ;
+let reviewSession                                                                                ;
 let reviewEpoch = 0;
 const dailyButton = document.querySelector                   ('#daily') ;
 const dailyDialog = document.querySelector                   ('#daily-dialog') ;
@@ -1366,20 +1433,33 @@ const SLOT_Y = 274;
 const FLIGHT_TIME = 330;
 const PARTICLE_LIMIT = 180;
 const lastStage = stored        ('pack-flow.last-stage', 0);
-const requestedStage = startingQuery.get('stage');
-const linkedStage = requestedStage !== null && /^[1-9]\d{0,14}$/.test(requestedStage) ? Number(requestedStage) - 1 : null;
+function relayStageIndex(query                 ) {
+  const requested = query.get('stage');
+  return requested !== null && /^[1-9]\d{0,14}$/.test(requested) ? Number(requested) - 1 : null;
+}
+const linkedStage = relayStageIndex(startingQuery);
 let levelIndex = !currentDaily && linkedStage !== null ? linkedStage : Number.isSafeInteger(lastStage) && lastStage >= 0 ? lastStage : 0;
 const toolButtons                                  = { MAGNET: document.querySelector                   ('#magnet') , SHUFFLE_BELT: document.querySelector                   ('#shuffle') , EXPAND_SLOT: document.querySelector                   ('#expand')  };
 const toolNames                       = { MAGNET: '磁力', SHUFFLE_BELT: '刷新', EXPAND_SLOT: '扩容' };
 let storageHealthy = true;
 let memorySessions = sessionBook(stored(SESSION_KEY, {}));
-const initial = openSavedGame(dailyRound?.level ?? levelAt(levelIndex), sessionId(levelIndex, currentDaily), currentDaily ? 0 : readFailures());
+const initialLevel = dailyRound?.level ?? levelAt(levelIndex);
+const relayRequest = new URLSearchParams(location.hash.slice(1)).get('relay');
+const initialRelay = relayRequest && (linkedStage !== null || currentDaily) ? decodeRelay(initialLevel, relayRequest) : undefined;
+let relayToken = initialRelay ? relayRequest : null;
+let relayStart = initialRelay?.journal?.length ?? 0;
+const initial = initialRelay ? { game: initialRelay, seconds: 0, record: undefined } : openSavedGame(initialLevel, sessionId(levelIndex, currentDaily), currentDaily ? 0 : readFailures());
 let game = initial.game;
 elapsedPlay = initial.seconds;
 let lastStoredMoves = initial.record?.moves.length ?? 0;
 let lastStoredSeconds = initial.seconds;
 let resumeBoard = Boolean(initial.record);
 const resumeStatus = document.getElementById('resume-status') ;
+const relayButton = document.querySelector                   ('#relay-open') ;
+const relayDialog = document.querySelector                   ('#relay-dialog') ;
+const relayInfo = document.getElementById('relay-info') ;
+const relayLink = document.querySelector                  ('#relay-link') ;
+const relayMessage = document.getElementById('relay-message') ;
 const dailyStart = document.querySelector                   ('#daily-start') ;
 const dailyHistory = document.querySelector                   ('#daily-history') ;
 const masterHistory = document.querySelector                   ('#master-history') ;
@@ -1720,7 +1800,7 @@ function openSavedGame(level       , key        , failures        ) {
 }
 
 function storeMasterSession(force = false) {
-  if (!game.journal?.length || practice) return;
+  if (!game.journal?.length || practice || relayToken) return;
   if (game.status === 'playing' && game.journal.length === lastStoredMoves && (!currentDaily || elapsedPlay <= lastStoredSeconds || (!force && elapsedPlay - lastStoredSeconds < 5))) return;
   const record = captureSession(game, elapsedPlay, Date.now());
   if (!record) return;
@@ -1752,6 +1832,7 @@ function findLatestMasterReview(book             ) {
 function recordResult() {
   if (game.status === recorded) return;
   recorded = game.status;
+  if (relayToken) { if (game.status === 'won') sound.play('win'); return; }
   storeMasterSession(true);
   if (!currentDaily && !practice) {
     try { localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1)); } catch {}
@@ -2160,7 +2241,7 @@ function board() {
   ctx.restore();
   rect(38, 1019, 644, 38, 10, theme.panel);
   const tapReady = !practice && !drag && game.items.some(item => directReady(game, item));
-  const tip = hintUntil > now ? notice : tapReady ? '已就位的货物可轻点直装' : game.level.master ? game.level.tip : practice ? '跟着上方提示练习 · 不计入主线或图鉴' : game.level.tip;
+  const tip = hintUntil > now ? notice : relayRequest && !initialRelay && noticeUntil > now ? notice : tapReady ? '已就位的货物可轻点直装' : game.level.master ? game.level.tip : practice ? '跟着上方提示练习 · 不计入主线或图鉴' : game.level.tip;
   ctx.save();
   ctx.beginPath();
   ctx.rect(48, 1019, guideButton.hidden ? 440 : 350, 38);
@@ -2249,7 +2330,7 @@ function paintReview(index        ) {
   const move = moves[index - 1];
   reviewRange.value = String(index);
   reviewRange.setAttribute('aria-valuetext', index + ' / ' + moves.length + ' 步');
-  reviewPrevious.disabled = index === 0;
+  reviewPrevious.disabled = index <= reviewSession.start;
   reviewNext.disabled = index >= moves.length;
 
   const nodes                = [];
@@ -2310,30 +2391,32 @@ function paintReview(index        ) {
   reviewGrid.style.setProperty('--review-rows', String(level.rows));
   reviewGrid.replaceChildren(...nodes);
   const resource = viewed.movesLeft === null ? '' : ' · 还剩 ' + viewed.movesLeft + ' 步';
-  const description = !move ? '开局' : move.to ? '第 ' + index + ' 步 · ' + (move.to.y < move.from.y ? '↑' : move.to.y > move.from.y ? '↓' : move.to.x < move.from.x ? '←' : '→') : '第 ' + index + ' 步 · 发货';
+  const description = reviewSession.start && index === reviewSession.start ? '接力起点 · 第 ' + index + ' 步后' : !move ? '开局' : move.to ? '第 ' + index + ' 步 · ' + (move.to.y < move.from.y ? '↑' : move.to.y > move.from.y ? '↓' : move.to.x < move.from.x ? '←' : '→') : '第 ' + index + ' 步 · 发货';
   reviewInfo.textContent = description + resource;
 }
 
 function openReview() {
   if (game.status === 'playing' || !game.journal?.length || !game.level.masterPar) return;
-  beginReview(game.level, game.journal, game.status === 'won');
+  beginReview(game.level, game.journal, game.status === 'won', relayStart);
 }
 
-function beginReview(level       , moves              , won         ) {
+function beginReview(level       , moves              , won         , start = 0) {
   reviewEpoch++;
-  reviewSession = { level, moves: [...moves], won };
+  reviewSession = { level, moves: [...moves], won, start };
+  reviewRange.min = String(start);
   reviewRange.max = String(moves.length);
   reviewAnalyze.hidden = won;
   reviewAnalyze.disabled = false;
-  reviewStatus.textContent = won ? '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。' : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
+  reviewStatus.textContent = won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。' : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
   paintReview(moves.length);
   reviewDialog.showModal();
 }
 
 function showDiagnosis(result           ) {
   if (result.kind === 'deviation') {
-    paintReview(result.at);
-    reviewStatus.textContent = '第 ' + result.at + ' 步后，剩余步数已不够通关。往前一步对照，复盘不会透露正确走法。';
+    const start = reviewSession?.start ?? 0;
+    paintReview(Math.max(start, result.at));
+    reviewStatus.textContent = result.at <= start ? '接力起点的剩余步数已经不够通关。' : '第 ' + result.at + ' 步后，剩余步数已不够通关。往前一步对照，复盘不会透露正确走法。';
   } else if (result.kind === 'in-budget') {
     reviewStatus.textContent = '这一步仍有能在预算内走完的路线。';
   } else if (result.kind === 'unknown') {
@@ -2374,6 +2457,14 @@ function updateResult() {
   reviewButton.hidden = !game.journal?.length;
   resultShare.hidden = !currentDaily && !game.level.master;
   resultShare.textContent = currentDaily ? '分享本期挑战' : '大师关卡册';
+  if (relayToken) {
+    resultShare.hidden = true;
+    resultTag.textContent = 'RELAY · 不计入正式成绩';
+    resultTitle.textContent = won ? '接力完成！' : '这次接力未过关';
+    resultDetail.textContent = won ? '接手后用了 ' + ((game.journal?.length ?? 0) - relayStart) + ' 步，正式进度没有变化。' : '步数用完了，可从分享点重试，或退出接力。';
+    resultAction.textContent = won ? '返回正式关卡 →' : '从接力点重试';
+    return;
+  }
   if (!currentDaily && game.level.master && won && game.movesLeft !== null && game.level.stepLimit !== undefined) {
     const moves = game.level.stepLimit - game.movesLeft;
     resultTag.textContent = 'MASTER ORDER · 大师通关';
@@ -2424,7 +2515,7 @@ function consume(event           ) {
     return;
   }
   if (event.kind !== 'ship') return;
-  if (!practice && event.to.kind === 'box' && collectCargo(progress, theme, event.item.color)) saveProgress();
+  if (!practice && !relayToken && event.to.kind === 'box' && collectCargo(progress, theme, event.item.color)) saveProgress();
   const combo = event.combo ?? 0;
   bestCombo = Math.max(bestCombo, combo);
   if (event.to.kind === 'buffer') sound.play('send');
@@ -2486,15 +2577,17 @@ function updateWorkshop() {
 }
 
 function updateControls() {
-  previous.disabled = !currentDaily && !practice && levelIndex === 0;
+  previous.disabled = !relayToken && !currentDaily && !practice && levelIndex === 0;
   hintButton.disabled = game.status !== 'playing';
-  const savedText = game.status === 'playing' && game.level.masterPar ? !storageHealthy ? '仅本页保存' : resumeBoard ? '已恢复存档' : lastStoredMoves ? '进度已保存' : '自动存档' : '';
+  const savedText = relayToken ? '接力 · 不计分' : game.status === 'playing' && game.level.masterPar ? !storageHealthy ? '仅本页保存' : resumeBoard ? '已恢复存档' : lastStoredMoves ? '进度已保存' : '自动存档' : '';
   if (resumeStatus.textContent !== savedText) resumeStatus.textContent = savedText;
   resumeStatus.hidden = !savedText;
+  relayButton.hidden = !(game.status === 'playing' && game.movesLeft && game.level.masterPar && game.journal?.length);
   updateWorkshop();
   next.disabled = !currentDaily && !practice && levelIndex >= Number.MAX_SAFE_INTEGER - 1;
-  const previousLabel = currentDaily || practice ? '← 回主线' : '← 上一关';
-  const nextLabel = practice ? '操作说明' : currentDaily ? '挑战列表' : '下一关 →';
+  const previousLabel = relayToken ? '← 退出接力' : currentDaily || practice ? '← 回主线' : '← 上一关';
+  const nextLabel = relayToken ? '传给朋友' : practice ? '操作说明' : currentDaily ? '挑战列表' : '下一关 →';
+  if (relayToken) next.disabled = game.status !== 'playing' || !game.movesLeft;
   if (previous.textContent !== previousLabel) previous.textContent = previousLabel;
   if (next.textContent !== nextLabel) next.textContent = nextLabel;
   for (const tool of Object.keys(toolNames)          ) {
@@ -2511,8 +2604,8 @@ function frame(time        ) {
   now = time;
   const elapsed = Math.min(0.1, Math.max(0, (time - lastTime) / 1000));
   lastTime = time;
-  if (!document.hidden && !stageDialog.open && !helpDialog.open && !shopDialog.open && !dailyDialog.open && !masterDialog.open && !reviewDialog.open) {
-    if (game.status === 'playing') elapsedPlay += elapsed;
+  if (!document.hidden && !stageDialog.open && !helpDialog.open && !shopDialog.open && !dailyDialog.open && !masterDialog.open && !reviewDialog.open && !relayDialog.open) {
+    if (game.status === 'playing' && !relayToken) elapsedPlay += elapsed;
     tick(game, elapsed);
     beltOffset = (beltOffset + elapsed * (game.level.beltSpeed ?? 76)) % 36;
   }
@@ -2577,7 +2670,7 @@ function cancelDrag() {
 }
 
 canvas.addEventListener('pointerdown', event => {
-  if (drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open || masterDialog.open || event.button !== 0) return;
+  if (drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open || masterDialog.open || relayDialog.open || event.button !== 0) return;
   sound.activate();
   keyboardId = undefined;
   hint = null;
@@ -2629,7 +2722,7 @@ function showHint() {
 
 hintButton.addEventListener('click', showHint);
 canvas.addEventListener('keydown', event => {
-  if (event.altKey || event.ctrlKey || event.metaKey || drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open || masterDialog.open) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || drag || game.status !== 'playing' || stageDialog.open || helpDialog.open || shopDialog.open || dailyDialog.open || masterDialog.open || relayDialog.open) return;
   const direction = arrowKeys[event.key];
   const key = event.key.toLowerCase();
   if (!direction && !['enter', ' ', 'q', 'e', 'h', 'escape'].includes(key)) return;
@@ -2647,17 +2740,45 @@ canvas.addEventListener('keydown', event => {
   if (result === 'packed' || result === 'buffered') keyboardId = undefined;
 });
 
-function setDailyAddress(day               ) {
-  const link = new URL(location.href);
+function showRelay() {
+  if (game.status !== 'playing' || !game.journal?.length) return;
+  const token = encodeRelay(game.level, game.journal);
+  if (!token) return;
+  cancelDrag();
+  relayInfo.textContent = game.level.title + ' · 已走 ' + game.journal.length + ' 步 · 剩余 ' + game.movesLeft + ' 步';
+  relayLink.value = relayAddress(location.href, levelIndex + 1, currentDaily, token);
+  relayMessage.textContent = '';
+  relayDialog.showModal();
+}
+
+relayButton.addEventListener('click', showRelay);
+relayLink.addEventListener('focus', () => relayLink.select());
+document.getElementById('relay-copy') .addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(relayLink.value);
+    if (relayDialog.open) relayMessage.textContent = '已复制，可以发给朋友。';
+  } catch {
+    if (!relayDialog.open) return;
+    relayLink.focus();
+    relayLink.select();
+    relayMessage.textContent = '自动复制不可用，请复制上方选中的链接。';
+  }
+});
+
+function setDailyAddress(day               , token                = null) {
+  const link = token ? new URL(relayAddress(location.href, levelIndex + 1, day, token)) : new URL(location.href);
   if (day) link.searchParams.set('daily', day);
   else link.searchParams.delete('daily');
-  link.searchParams.delete('stage');
+  if (!token) {
+    link.searchParams.delete('stage');
+    if (new URLSearchParams(link.hash.slice(1)).has('relay')) link.hash = '';
+  }
   if (link.href !== location.href) {
     try { history.replaceState(null, '', link); } catch {}
   }
 }
 
-function load(index        , day                = null, training = false, restart = false) {
+function load(index        , day                = null, training = false, restart = false, token                = null) {
   if (!Number.isSafeInteger(index) || index < 0) return;
   for (const event of game.events.splice(0)) consume(event);
   recordResult();
@@ -2667,8 +2788,12 @@ function load(index        , day                = null, training = false, restar
   practice = training;
   currentDaily = day;
   dailyRound = day ? dailyForDay(day) : null;
-  setDailyAddress(day);
-  if (!day && !practice) {
+  const level = practice ? catalog.training : dailyRound?.level ?? levelAt(index);
+  const relay = token && !training ? decodeRelay(level, token) : undefined;
+  relayToken = relay ? token : null;
+  relayStart = relay?.journal?.length ?? 0;
+  setDailyAddress(day, relayToken);
+  if (!day && !practice && !relayToken) {
     try { localStorage.setItem('pack-flow.last-stage', JSON.stringify(index)); } catch {}
   }
   elapsedPlay = 0;
@@ -2679,8 +2804,8 @@ function load(index        , day                = null, training = false, restar
   hintUntil = 0;
   applyTheme();
   const key = sessionId(index, day);
-  if (restart && !training) writeSessionBook(discardDraft(readSessionBook(), key));
-  const start = training ? { game: createGame(catalog.training), seconds: 0, record: undefined } : openSavedGame(dailyRound?.level ?? levelAt(index), key, day ? 0 : readFailures());
+  if (restart && !training && !relayToken) writeSessionBook(discardDraft(readSessionBook(), key));
+  const start = training || relay ? { game: relay ?? createGame(level), seconds: 0, record: undefined } : openSavedGame(level, key, day ? 0 : readFailures());
   game = start.game;
   elapsedPlay = start.seconds;
   lastStoredMoves = start.record?.moves.length ?? 0;
@@ -2703,6 +2828,24 @@ function load(index        , day                = null, training = false, restar
   updateCoach();
   updateControls();
 }
+window.addEventListener('hashchange', () => {
+  const address = new URL(location.href);
+  const token = new URLSearchParams(address.hash.slice(1)).get('relay');
+  if (token === relayToken) return;
+  if (!token) { if (relayToken) load(levelIndex, currentDaily); return; }
+  const requestedDay = address.searchParams.get('daily');
+  const day = requestedDay && dailySerial(requestedDay) !== null && requestedDay <= chinaDay() ? requestedDay : null;
+  const index = day ? levelIndex : relayStageIndex(address.searchParams);
+  if (index === null || !decodeRelay(day ? dailyForDay(day).level : levelAt(index), token)) {
+    announce('这个接力链接已失效');
+    hintUntil = noticeUntil;
+    setDailyAddress(currentDaily, relayToken);
+    return;
+  }
+  if (relayDialog.open) relayDialog.close();
+  load(index, day, false, false, token);
+});
+
 function startTraining() {
   if (helpDialog.open) helpDialog.close();
   practiceSeen = true;
@@ -2712,10 +2855,14 @@ function startTraining() {
 
 guideButton.addEventListener('click', startTraining);
 document.getElementById('training-help') .addEventListener('click', startTraining);
-previous.addEventListener('click', () => load(currentDaily || practice ? levelIndex : levelIndex - 1));
-retry.addEventListener('click', () => load(levelIndex, currentDaily, practice, true));
+previous.addEventListener('click', () => {
+  if (relayToken) load(levelIndex, currentDaily);
+  else load(currentDaily || practice ? levelIndex : levelIndex - 1);
+});
+retry.addEventListener('click', () => load(levelIndex, currentDaily, practice, true, relayToken));
 next.addEventListener('click', () => {
-  if (practice) { cancelDrag(); helpDialog.showModal(); }
+  if (relayToken) showRelay();
+  else if (practice) { cancelDrag(); helpDialog.showModal(); }
   else if (currentDaily) showDaily(currentDaily);
   else load(levelIndex + 1);
 });
@@ -2757,7 +2904,8 @@ levelsButton.addEventListener('click', () => { cancelDrag(); showStages(); });
 helpButton.addEventListener('click', () => { cancelDrag(); helpDialog.showModal(); });
 soundButton.addEventListener('click', () => { sound.toggle(); updateSoundButton(); });
 resultAction.addEventListener('click', () => {
-  if (practice) load(levelIndex, null, game.status === 'lost');
+  if (relayToken) load(levelIndex, currentDaily, false, false, game.status === 'lost' ? relayToken : null);
+  else if (practice) load(levelIndex, null, game.status === 'lost');
   else if (currentDaily || game.status === 'lost') load(levelIndex, currentDaily, false, true);
   else if (game.status === 'won') load(levelIndex + 1);
 });
@@ -2800,6 +2948,7 @@ const dpr = Math.min(2, Math.max(1, devicePixelRatio || 1));
 canvas.width = BELT_WIDTH * dpr;
 canvas.height = HEIGHT * dpr;
 ctx.scale(dpr, dpr);
+if (relayRequest && !initialRelay) announce('接力链接已失效，已打开普通关卡');
 updateSoundButton();
 updateCoach();
 updateControls();
