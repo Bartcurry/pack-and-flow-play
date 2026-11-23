@@ -1470,12 +1470,25 @@ export function* suggestMasterMove(board      , searchLimit = defaultBudgetSearc
 
                                                                                                             
 
-export async function diagnoseReview(level       , moves                       , pause                         = async () => true)                     {
+const DIAGNOSIS_SLICE_MS = 7;
+
+export async function diagnoseReview(
+  level       ,
+  moves                       ,
+  pause                         = async () => true,
+  onStep                         
+)                     {
   const inspect = async (through        )                                     => {
+    if (!await pause()) return 'cancelled';
+    onStep?.(through);
     const search = reviewFeasibility(replayAt(level, moves, through));
+    let deadline = performance.now() + DIAGNOSIS_SLICE_MS;
     let result = search.next();
     while (!result.done) {
-      if (!await pause()) return 'cancelled';
+      if (performance.now() >= deadline) {
+        if (!await pause()) return 'cancelled';
+        deadline = performance.now() + DIAGNOSIS_SLICE_MS;
+      }
       result = search.next();
     }
     return result.value;
@@ -1920,6 +1933,7 @@ const reviewLastLeg = document.querySelector                   ('#review-last-le
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
+let reviewAnalyzing = false;
 const dailyButton = document.querySelector                   ('#daily') ;
 const dailyDialog = document.querySelector                   ('#daily-dialog') ;
 const dailyList = document.getElementById('daily-list') ;
@@ -3271,7 +3285,7 @@ function beginReview(level       , moves              , won         , options   
   reviewRange.min = String(start);
   reviewRange.max = String(moves.length);
   reviewAnalyze.hidden = won;
-  reviewAnalyze.disabled = false;
+  setReviewAnalyzing(false);
   reviewStatus.textContent = shared
     ? level.title + ' · ' + moves.length + ' 步 · ' + (won ? '已通关' : '未过关')
     : won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。'
@@ -3300,7 +3314,7 @@ function startReviewTrial(start        ) {
   if (!board) return;
   stopReviewPlayback();
   flushMasterSession();
-  const message = reviewAnalyze.disabled ? '拖动进度条查看原局，或重新定位走偏点。' : reviewStatus.textContent ?? '';
+  const message = reviewAnalyzing ? '拖动进度条查看原局，或重新定位走偏点。' : reviewStatus.textContent ?? '';
   reviewTrial = { session, start, original: game, training: practice, message };
   practice = false;
   reviewEpoch++;
@@ -3340,7 +3354,7 @@ function endReviewTrial(reopen         ) {
   if (!reopen) return;
   reviewSession = trial.session;
   reviewStatus.textContent = trial.message;
-  reviewAnalyze.disabled = false;
+  setReviewAnalyzing(false);
   paintReview(trial.start);
   reviewDialog.showModal();
 }
@@ -3387,11 +3401,17 @@ function updateReviewPlayback() {
   const atEnd = reviewSession && Number(reviewRange.value) >= reviewSession.moves.length;
   const label = playing ? '暂停' : atEnd ? '重播' : '播放';
   if (reviewPlay.textContent !== label) reviewPlay.textContent = label;
-  reviewPlay.disabled = reviewAnalyze.disabled;
+  reviewPlay.disabled = reviewAnalyzing;
   const speech = playing ? 'off' : 'polite';
   for (const target of [reviewInfo, reviewCircuitPanel.details]) {
     if (target.getAttribute('aria-live') !== speech) target.setAttribute('aria-live', speech);
   }
+}
+
+function setReviewAnalyzing(active         ) {
+  reviewAnalyzing = active;
+  reviewAnalyze.textContent = active ? '取消分析' : '定位走偏点';
+  updateReviewPlayback();
 }
 
 function stopReviewPlayback() {
@@ -3402,7 +3422,7 @@ function stopReviewPlayback() {
 
 function startReviewPlayback() {
   const session = reviewSession;
-  if (!reviewDialog.open || document.hidden || !session || reviewAnalyze.disabled) return;
+  if (!reviewDialog.open || document.hidden || !session || reviewAnalyzing) return;
   stopReviewPlayback();
   if (Number(reviewRange.value) >= session.moves.length) paintReview(session.start);
   reviewPlayback = window.setInterval(() => {
@@ -3452,32 +3472,37 @@ reviewDialog.addEventListener('close', () => {
   if (reviewDialog.open || reviewTrial) return;
   stopReviewPlayback();
   reviewEpoch++;
+  setReviewAnalyzing(false);
   const day = reviewSession?.returnDay;
   if (day) showDaily(day);
   else if (reviewSession?.shared) clearReviewLink();
 });
 reviewAnalyze.addEventListener('click', async () => {
   const session = reviewSession;
-  if (!session) return;
+  if (!reviewDialog.open || !session || session.won) return;
+  if (reviewAnalyzing) {
+    reviewEpoch++;
+    setReviewAnalyzing(false);
+    reviewStatus.textContent = '已取消分析，可继续查看棋谱。';
+    return;
+  }
   stopReviewPlayback();
   const epoch = ++reviewEpoch;
-  reviewAnalyze.disabled = true;
-  updateReviewPlayback();
+  setReviewAnalyzing(true);
   reviewStatus.textContent = '正在比较各步的剩余预算…';
+  const isCurrent = () => epoch === reviewEpoch && reviewDialog.open;
   try {
-    await new Promise(resolve => setTimeout(resolve, 0));
     const result = await diagnoseReview(session.level, session.moves, async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
-      return epoch === reviewEpoch && reviewDialog.open;
+      return isCurrent();
+    }, step => {
+      reviewStatus.textContent = step ? '正在检查第 ' + step + ' 步后的路线…' : '正在检查开局路线…';
     });
-    if (epoch === reviewEpoch && reviewDialog.open) showDiagnosis(result);
+    if (isCurrent()) showDiagnosis(result);
   } catch {
-    if (epoch === reviewEpoch && reviewDialog.open) reviewStatus.textContent = '这局未能分析，可手动查看棋谱。';
+    if (isCurrent()) reviewStatus.textContent = '这局未能分析，可手动查看棋谱。';
   } finally {
-    if (epoch === reviewEpoch) {
-      reviewAnalyze.disabled = false;
-      updateReviewPlayback();
-    }
+    if (epoch === reviewEpoch) setReviewAnalyzing(false);
   }
 });
 
