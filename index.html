@@ -202,6 +202,7 @@
     .review-controls input { flex: 1; min-width: 0; accent-color: #c8adf1; }
     .review-actions { display: flex; gap: 2.1cqw; }
     .review-actions button { flex: 1 1 0; min-width: 0; min-height: 9.1cqw; margin-top: 2.7cqw; padding: 1cqw 1.35cqw; white-space: normal; }
+    #review-share-status:empty { display: none; }
     .run-flags { position: absolute; top: 27.15%; right: 5.55%; display: flex; align-items: center; gap: 1.15cqw; }
     #relay-open { min-height: 5.65cqw; color: #f2dcff; border-color: #815fac; background: #503e64; padding: .2cqw 1.2cqw; font-size: clamp(9px, 2.4cqw, 14px); }
     #relay-message:empty { display: none; }
@@ -284,6 +285,9 @@
         <button type="button" id="review-analyze">定位走偏点</button>
         <button type="button" class="primary" id="review-trial" hidden>从这步试走</button>
       </div>
+      <button type="button" class="wide session-history" id="review-share" hidden>复制复盘链接</button>
+      <input id="review-link" class="daily-link" type="url" readonly hidden aria-label="可复制的复盘链接">
+      <p id="review-share-status" class="intro" role="status"></p>
     </dialog>
     <dialog id="master-dialog" aria-labelledby="master-title">
       <header><div><span class="eyebrow">MASTER WORKSHOP</span><h2 id="master-title">工坊关卡册</h2></div><form method="dialog"><button type="submit" aria-label="关闭大师关卡册">关闭</button></form></header>
@@ -1514,8 +1518,12 @@ function base64URL(input        ) {
   return btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function encodeRelay(level       , journal                       ) {
-  if (!level.masterPar || !level.stepLimit || !journal.length || journal.length >= level.stepLimit || journal.length > REPLAY_MOVE_LIMIT) return undefined;
+function traceBudget(level       , kind           ) {
+  return level.stepLimit  - Number(kind === 'r');
+}
+
+function encodeTrace(level       , journal                       , kind           ) {
+  if (!level.masterPar || !level.stepLimit || !journal.length || journal.length > traceBudget(level, kind) || journal.length > REPLAY_MOVE_LIMIT) return undefined;
   const stride = level.turntables?.length ? 6 : 5;
   const bytes           = [];
   for (const move of journal) {
@@ -1526,18 +1534,18 @@ export function encodeRelay(level       , journal                       ) {
     if (direction < 0 || direction >= stride) return undefined;
     bytes.push(String.fromCharCode(index * stride + direction));
   }
-  return (stride === 6 ? 'r2.' : 'r1.') + boardStamp(level) + '.' + base64URL(bytes.join(''));
+  return kind + (stride === 6 ? '2.' : '1.') + boardStamp(level) + '.' + base64URL(bytes.join(''));
 }
 
-export function decodeRelay(level       , raw               )                   {
+function decodeTrace(level       , raw               , kind           )                   {
   if (!raw || raw.length > RELAY_TOKEN_LIMIT || !level.masterPar || !level.stepLimit) return undefined;
-  const match = /^(r[12])\.([a-z0-9-]{1,32})\.([A-Za-z0-9_-]+)$/.exec(raw);
-  if (!match || match[2] !== boardStamp(level)) return undefined;
-  const stride = match[1] === 'r2' ? 6 : 5;
+  const match = /^([rv])([12])\.([a-z0-9-]{1,32})\.([A-Za-z0-9_-]+)$/.exec(raw);
+  if (!match || match[1] !== kind || match[3] !== boardStamp(level)) return undefined;
+  const stride = match[2] === '2' ? 6 : 5;
   if ((stride === 6) !== Boolean(level.turntables?.length)) return undefined;
   let bytes        ;
-  try { bytes = atob(match[3].replace(/-/g, '+').replace(/_/g, '/')); } catch { return undefined; }
-  if (bytes.length > REPLAY_MOVE_LIMIT || bytes.length >= level.stepLimit || base64URL(bytes) !== match[3]) return undefined;
+  try { bytes = atob(match[4].replace(/-/g, '+').replace(/_/g, '/')); } catch { return undefined; }
+  if (bytes.length > REPLAY_MOVE_LIMIT || bytes.length > traceBudget(level, kind) || base64URL(bytes) !== match[4]) return undefined;
   const board = createGame(level);
   for (const byte of bytes) {
     const code = byte.charCodeAt(0);
@@ -1554,17 +1562,50 @@ export function decodeRelay(level       , raw               )                   
       if (dragToward(board, item.id, { x: item.origin.x + dx, y: item.origin.y + dy }) !== 'slid') return undefined;
     }
   }
-  if (board.status !== 'playing' || !board.movesLeft || board.journal?.length !== bytes.length) return undefined;
+  if (board.journal?.length !== bytes.length) return undefined;
+  if (kind === 'v' && board.status === 'playing' && board.movesLeft === 0) tick(board, 0.01);
+  if (kind === 'r' ? board.status !== 'playing' || !board.movesLeft : board.status === 'playing') return undefined;
   board.events = [];
   return board;
 }
 
-export function relayAddress(address        , stage        , day               , token        ) {
+export function encodeRelay(level       , journal                       ) {
+  return encodeTrace(level, journal, 'r');
+}
+
+export function decodeRelay(level       , raw               ) {
+  return decodeTrace(level, raw, 'r');
+}
+
+export function encodeReview(level       , journal                       ) {
+  const token = encodeTrace(level, journal, 'v');
+  const moves = token && decodeTrace(level, token, 'v')?.journal;
+  if (!moves || !journal.every((move, index) => {
+    const actual = moves[index];
+    return actual.id === move.id && actual.from.x === move.from.x && actual.from.y === move.from.y &&
+      actual.to?.x === move.to?.x && actual.to?.y === move.to?.y && actual.turn === move.turn;
+  })) return undefined;
+  return token;
+}
+
+export function decodeReview(level       , raw               ) {
+  return decodeTrace(level, raw, 'v');
+}
+
+function boardLink(address        , stage        , day               , key        , token        ) {
   const link = new URL(address);
   link.search = '';
   link.searchParams.set(day ? 'daily' : 'stage', day ?? String(stage));
-  link.hash = 'relay=' + token;
+  link.hash = key + '=' + token;
   return link.href;
+}
+
+export function relayAddress(address        , stage        , day               , token        ) {
+  return boardLink(address, stage, day, 'relay', token);
+}
+
+export function reviewAddress(address        , stage        , day               , token        ) {
+  return boardLink(address, stage, day, 'review', token);
 }
 
 
@@ -1727,12 +1768,18 @@ const reviewGates = document.getElementById('review-gates') ;
 const reviewInfo = document.getElementById('review-info') ;
 const reviewStatus = document.getElementById('review-status') ;
 const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
+const reviewHeading = document.getElementById('review-title') ;
+const reviewShare = document.querySelector                   ('#review-share') ;
+const reviewLinkField = document.querySelector                  ('#review-link') ;
+const reviewShareStatus = document.getElementById('review-share-status') ;
 const reviewRange = document.querySelector                  ('#review-range') ;
 const reviewPrevious = document.querySelector                   ('#review-previous') ;
 const reviewNext = document.querySelector                   ('#review-next') ;
 const reviewAnalyze = document.querySelector                   ('#review-analyze') ;
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
-                                                                                                                                  
+                                                         
+                                                                                                                           
+                                                                                                                              
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
@@ -1808,7 +1855,7 @@ const dailyStart = document.querySelector                   ('#daily-start') ;
 const dailyHistory = document.querySelector                   ('#daily-history') ;
 const dailyDrafts = document.querySelector                   ('#daily-drafts') ;
 const masterHistory = document.querySelector                   ('#master-history') ;
-let latestMasterReview                                                     ;
+let latestMasterReview                                                                    ;
 const hintButton = document.querySelector                   ('#hint') ;
 const singleStepButton = document.querySelector                   ('#single-step') ;
 let singleStepDrag = stored('pack-flow.single-step-drag', false) === true;
@@ -2959,24 +3006,34 @@ function paintReview(index        ) {
 
 function openReview() {
   if (game.status === 'playing' || !game.journal?.length || !game.level.masterPar) return;
-  beginReview(game.level, game.journal, game.status === 'won', { start: relayStart, allowsTrial: !currentDaily && !relayToken });
+  const source = { index: levelIndex, day: currentDaily };
+  beginReview(game.level, game.journal, game.status === 'won', { start: relayStart, allowsTrial: !currentDaily && !relayToken, source });
 }
 
-function beginReview(level       , moves              , won         , options                                                                = {}) {
+function beginReview(level       , moves              , won         , options                = {}) {
   if (reviewTrial) endReviewTrial(false);
-  const { start = 0, allowsTrial = false, returnDay } = options;
+  const { start = 0, allowsTrial = false, returnDay, shared = false } = options;
   reviewEpoch++;
-  reviewSession = { level, moves: [...moves], won, start, allowsTrial, returnDay };
-  reviewClose.textContent = returnDay ? '返回挑战' : '关闭';
-  reviewClose.setAttribute('aria-label', returnDay ? '返回挑战日期' : '关闭复盘');
+  reviewSession = { ...options, level, moves: [...moves], won, start, allowsTrial };
+  reviewHeading.textContent = shared ? '分享棋谱' : '局后复盘';
+  const closeLabel = returnDay ? '返回挑战' : shared ? '返回游戏' : '关闭';
+  reviewClose.textContent = closeLabel;
+  reviewClose.setAttribute('aria-label', returnDay ? '返回挑战日期' : shared ? closeLabel : '关闭复盘');
+  reviewShare.hidden = !options.source;
+  reviewLinkField.hidden = true;
+  reviewLinkField.value = '';
+  reviewShareStatus.textContent = '';
   reviewTrialButton.hidden = !allowsTrial;
   reviewRange.min = String(start);
   reviewRange.max = String(moves.length);
   reviewAnalyze.hidden = won;
   reviewAnalyze.disabled = false;
-  reviewStatus.textContent = won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。' : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
-  paintReview(moves.length);
-  reviewDialog.showModal();
+  reviewStatus.textContent = shared
+    ? level.title + ' · ' + moves.length + ' 步 · ' + (won ? '已通关' : '未过关')
+    : won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。'
+      : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
+  paintReview(shared ? start : moves.length);
+  if (!reviewDialog.open) reviewDialog.showModal();
 }
 
 function showDiagnosis(result           ) {
@@ -3044,8 +3101,32 @@ function endReviewTrial(reopen         ) {
   reviewDialog.showModal();
 }
 
+async function copyReviewLink() {
+  const session = reviewSession;
+  if (!reviewDialog.open || !session?.source) return;
+  const token = encodeReview(session.level, session.moves);
+  if (!token) {
+    reviewShareStatus.textContent = '这局棋谱无法生成链接';
+    return;
+  }
+  const link = reviewAddress(location.href, session.source.index + 1, session.source.day, token);
+  reviewLinkField.value = link;
+  try {
+    await navigator.clipboard.writeText(link);
+    if (reviewSession === session && reviewDialog.open) reviewShareStatus.textContent = '复盘链接已复制';
+  } catch {
+    if (reviewSession !== session || !reviewDialog.open) return;
+    reviewLinkField.hidden = false;
+    reviewLinkField.focus();
+    reviewLinkField.select();
+    reviewShareStatus.textContent = '请复制文本框中的复盘链接';
+  }
+}
+
 reviewButton.addEventListener('click', openReview);
 reviewTrialButton.addEventListener('click', startReviewTrial);
+reviewShare.addEventListener('click', () => { void copyReviewLink(); });
+reviewLinkField.addEventListener('focus', () => reviewLinkField.select());
 reviewRange.addEventListener('input', () => paintReview(Number(reviewRange.value)));
 reviewPrevious.addEventListener('click', () => paintReview(Number(reviewRange.value) - 1));
 reviewNext.addEventListener('click', () => paintReview(Number(reviewRange.value) + 1));
@@ -3054,6 +3135,7 @@ reviewDialog.addEventListener('close', () => {
   reviewEpoch++;
   const day = reviewSession?.returnDay;
   if (day) showDaily(day);
+  else if (reviewSession?.shared) clearReviewLink();
 });
 reviewAnalyze.addEventListener('click', async () => {
   const session = reviewSession;
@@ -3687,8 +3769,45 @@ function displayBoard(board      ) {
   updateCoach();
   updateControls();
 }
+function clearReviewLink() {
+  const address = new URL(location.href);
+  const fragment = new URLSearchParams(address.hash.slice(1));
+  if (!fragment.has('review')) return;
+  fragment.delete('review');
+  if (relayToken && !fragment.has('relay')) fragment.set('relay', relayToken);
+  address.hash = fragment.toString();
+  try { history.replaceState(null, '', address); } catch {}
+}
+
+function showLinkedReview(address     ) {
+  const token = new URLSearchParams(address.hash.slice(1)).get('review');
+  if (token === null) return false;
+  const day = address.searchParams.get('daily');
+  const index = day === null ? relayStageIndex(address.searchParams) : levelIndex;
+  const validDay = day === null || (dailySerial(day) !== null && day <= chinaDay());
+  if (index !== null && validDay) {
+    const candidates = day
+      ? [dailyForDay(day).level]
+      : [authoredLevel(index), ...archivedFinals.map(final => archivedMasterLevel(index, final))];
+    for (const level of candidates) {
+      const board = level && decodeReview(level, token);
+      if (board?.journal) {
+        beginReview(board.level, board.journal, board.status === 'won', { shared: true, source: { index, day } });
+        return true;
+      }
+    }
+  }
+  if (reviewDialog.open && reviewSession?.shared) reviewDialog.close();
+  clearReviewLink();
+  announce('这条复盘链接无法打开');
+  hintUntil = noticeUntil;
+  return true;
+}
+
 window.addEventListener('hashchange', () => {
   const address = new URL(location.href);
+  if (showLinkedReview(address)) return;
+  if (reviewDialog.open && reviewSession?.shared) reviewDialog.close();
   const token = new URLSearchParams(address.hash.slice(1)).get('relay');
   if (token === relayToken) return;
   if (!token) { if (relayToken) load(levelIndex, currentDaily); return; }
@@ -3751,13 +3870,13 @@ dailyHistory.addEventListener('click', () => {
   const record = readSessionBook()[sessionId(0, dailySelection)]?.latest;
   if (!record || !restoreSession(level, record)) return;
   dailyDialog.close();
-  beginReview(level, record.moves, record.status === 'won', { returnDay: dailySelection });
+  beginReview(level, record.moves, record.status === 'won', { returnDay: dailySelection, source: { index: levelIndex, day: dailySelection } });
 });
 masterHistory.addEventListener('click', () => {
   if (!latestMasterReview) return;
-  const { level, record } = latestMasterReview;
+  const { index, level, record } = latestMasterReview;
   masterDialog.close();
-  beginReview(level, record.moves, record.status === 'won', { allowsTrial: true });
+  beginReview(level, record.moves, record.status === 'won', { allowsTrial: true, source: { index, day: null } });
 });
 window.addEventListener('pagehide', flushMasterSession);
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushMasterSession(); });
@@ -3827,7 +3946,7 @@ const dpr = Math.min(2, Math.max(1, devicePixelRatio || 1));
 canvas.width = BELT_WIDTH * dpr;
 canvas.height = HEIGHT * dpr;
 ctx.scale(dpr, dpr);
-if (relayRequest && !initialRelay) announce('接力链接已失效，已打开普通关卡');
+if (!showLinkedReview(new URL(location.href)) && relayRequest && !initialRelay) announce('接力链接已失效，已打开普通关卡');
 updateSoundButton();
 updateCoach();
 updateControls();
