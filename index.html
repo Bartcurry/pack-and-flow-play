@@ -171,6 +171,10 @@
     .review-controls { display: flex; gap: 2.1cqw; align-items: center; }
     .review-controls button { min-width: 9.5cqw; min-height: 8.5cqw; }
     .review-controls input { flex: 1; min-width: 0; accent-color: #c8adf1; }
+    #resume-status { position: absolute; top: 27.25%; right: 5.55%; color: #c8f3e0; border: 1px solid #557d79; background: #294651; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 800; border-radius: 1.2cqw; padding: .48cqw 1.1cqw; pointer-events: none; }
+    .session-history { margin: 0 0 2cqw; color: #e5d4ff; background: #443853; border-color: #7c6494; }
+    #daily-history { margin: 2cqw 0 0; }
+    .master-card .master-resume-tag { color: #b3f7dd; font-weight: 850; }
   </style>
 </head>
 <body>
@@ -181,6 +185,7 @@
     <p id="keyboard-help" class="sr-only">键盘：按 E 或回车选择下一件货，Q 选择上一件，方向键移动，H 查看提示。</p>
     <div class="quick" aria-label="试玩设置"><button id="daily" type="button" aria-label="每日挑战">挑战</button><button id="levels" type="button">关卡</button><button id="shop" type="button" aria-label="梦想小店与图鉴">小店</button><button id="help" type="button" aria-label="玩法说明">帮助</button><button id="sound" type="button" aria-pressed="true">声音</button></div>
     <p id="status" class="sr-only" role="status">正在加载关卡。</p>
+    <span id="resume-status" aria-live="polite" hidden></span>
     <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button><button class="secondary" id="result-review" type="button" hidden>复盘这局</button><button class="secondary" id="result-share" type="button" hidden>分享本期挑战</button></section>
     <div id="master-rules" role="status" hidden></div>
     <nav class="tools" aria-label="救场道具"><button id="magnet" type="button" title="吸走最多三件匹配货物">磁力</button><button id="shuffle" type="button" title="刷新订单并清理暂存">刷新</button><button id="expand" type="button" title="把暂存扩至四格">扩容</button></nav>
@@ -192,6 +197,7 @@
       <div class="daily-list" id="daily-list" aria-label="选择挑战日期"></div>
       <p class="intro">每日只出终局级联锁题，无道具。通关一星，比最短解多一步以内两星，走到最短解三星；同用步才比较时间。</p>
       <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
+      <button type="button" class="wide session-history" id="daily-history" hidden>复盘此日最近一局</button>
       <input id="daily-link" class="daily-link" type="url" readonly hidden aria-label="可复制的挑战链接"><p id="daily-share-status" class="intro" role="status"></p>
     </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title">
@@ -208,6 +214,7 @@
       <div class="master-banner"><strong>腾出一条路</strong><p>灰色挡板不是货物，只能沿箭头推拉，不能出货。推拉一格与出货各计一步。每 5 关进入大师单，逢 10 关是更难的验收单。后段需要压住踏板，开启同字母的闸门；带 ↥ 的踏板则要松开，才能触发对应闸门。</p></div>
       <div id="master-filters" aria-label="筛选大师谜题"><button type="button" data-filter="all" aria-pressed="true">全部</button><button type="button" data-filter="slide" aria-pressed="false">移挡</button><button type="button" data-filter="circuit" aria-pressed="false">联锁</button></div>
       <p id="master-tally" role="status"></p>
+      <button type="button" class="wide session-history" id="master-history" hidden>复盘最近一局</button>
       <div id="master-list" aria-label="大师谜题"></div>
     </dialog>
     <dialog id="stage-dialog" aria-labelledby="stage-title">
@@ -1116,6 +1123,93 @@ export async function diagnoseReview(level       , moves                       ,
 }
 
 
+                                                                                                                             
+                                                                             
+                                                      
+export const SESSION_KEY = 'pack-flow.session-book.v1';
+const BOOK_LIMIT = 18;
+const MOVE_LIMIT = 200;
+
+export function sessionId(index        , day               ) {
+  return day ? 'daily:' + day : 'stage:' + (index + 1);
+}
+
+export function boardStamp(level       ) {
+  const { title, tip, ...position } = level;
+  const source = JSON.stringify(position);
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index++) hash = Math.imul(hash ^ source.charCodeAt(index), 16777619);
+  return '1-' + source.length + '-' + (hash >>> 0).toString(36);
+}
+
+function validCell(value         )                 {
+  if (!value || typeof value !== 'object') return false;
+  const point = value         ;
+  return Number.isInteger(point.x) && point.x >= 0 && point.x < 16 && Number.isInteger(point.y) && point.y >= 0 && point.y < 16;
+}
+
+function validMove(value         )                      {
+  if (!value || typeof value !== 'object') return false;
+  const move = value              ;
+  if (typeof move.id !== 'string' || move.id.length > 48 || !validCell(move.from)) return false;
+  return move.to === null || (validCell(move.to) && Math.abs(move.from.x - move.to.x) + Math.abs(move.from.y - move.to.y) === 1);
+}
+
+function validSession(value         )                         {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value                 ;
+  return typeof entry.board === 'string' && entry.board.length <= 32 && Number.isFinite(entry.savedAt) && entry.savedAt >= 0 &&
+    Number.isFinite(entry.seconds) && entry.seconds >= 0 && entry.seconds <= 86400 &&
+    (entry.status === 'playing' || entry.status === 'won' || entry.status === 'lost') &&
+    Array.isArray(entry.moves) && entry.moves.length > 0 && entry.moves.length <= MOVE_LIMIT && entry.moves.every(validMove);
+}
+
+export function sessionBook(value         )              {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries                          = [];
+  for (const [key, raw] of Object.entries(value)) {
+    if (!/^(stage:[1-9]\d{0,14}|daily:\d{4}-\d{2}-\d{2})$/.test(key) || !raw || typeof raw !== 'object') continue;
+    const active = validSession(raw.active) && raw.active.status === 'playing' ? raw.active : undefined;
+    const latest = validSession(raw.latest) && raw.latest.status !== 'playing' ? raw.latest : undefined;
+    if (active || latest) entries.push([key, { active, latest }]);
+  }
+  const freshness = ({ active, latest }             ) => Math.max(active?.savedAt ?? 0, latest?.savedAt ?? 0);
+  entries.sort(([, left], [, right]) => freshness(right) - freshness(left));
+  return Object.fromEntries(entries.slice(0, BOOK_LIMIT));
+}
+
+export function captureSession(game      , seconds        , savedAt        )                            {
+  if (!game.level.masterPar || !game.level.stepLimit || !game.journal?.length) return undefined;
+  const record = { board: boardStamp(game.level), moves: [...game.journal], seconds: Math.min(seconds, 86400), status: game.status, savedAt };
+  return validSession(record) ? record : undefined;
+}
+
+export function restoreSession(level       , value         )                   {
+  if (!validSession(value) || !level.masterPar || !level.stepLimit || value.moves.length > level.stepLimit || value.board !== boardStamp(level)) return undefined;
+  try {
+    const board = replayAt(level, value.moves, value.moves.length);
+    if (board.status === 'playing' && board.movesLeft === 0) tick(board, 0.01);
+    if (board.status !== value.status) return undefined;
+    board.events = [];
+    board.journal = [...value.moves];
+    return board;
+  } catch {
+    return undefined;
+  }
+}
+
+export function putSession(book             , key        , record               ) {
+  const previous = book[key] ?? {};
+  const slot              = record.status === 'playing' ? { ...previous, active: record } : { latest: record };
+  return sessionBook({ ...book, [key]: slot });
+}
+
+export function discardDraft(book             , key        ) {
+  const { latest } = book[key] ?? {};
+  return sessionBook({ ...book, [key]: { latest } });
+}
+
+
 export function guideCue(game      ) {
   if (game.status !== 'playing') return null;
   const late = game.items.find(item => item.id === 'practice-purple');
@@ -1277,7 +1371,19 @@ const linkedStage = requestedStage !== null && /^[1-9]\d{0,14}$/.test(requestedS
 let levelIndex = !currentDaily && linkedStage !== null ? linkedStage : Number.isSafeInteger(lastStage) && lastStage >= 0 ? lastStage : 0;
 const toolButtons                                  = { MAGNET: document.querySelector                   ('#magnet') , SHUFFLE_BELT: document.querySelector                   ('#shuffle') , EXPAND_SLOT: document.querySelector                   ('#expand')  };
 const toolNames                       = { MAGNET: '磁力', SHUFFLE_BELT: '刷新', EXPAND_SLOT: '扩容' };
-let game = dailyRound ? createGame(dailyRound.level) : createGame(levelAt(levelIndex), readFailures());
+let storageHealthy = true;
+let memorySessions = sessionBook(stored(SESSION_KEY, {}));
+const initial = openSavedGame(dailyRound?.level ?? levelAt(levelIndex), sessionId(levelIndex, currentDaily), currentDaily ? 0 : readFailures());
+let game = initial.game;
+elapsedPlay = initial.seconds;
+let lastStoredMoves = initial.record?.moves.length ?? 0;
+let lastStoredSeconds = initial.seconds;
+let resumeBoard = Boolean(initial.record);
+const resumeStatus = document.getElementById('resume-status') ;
+const dailyStart = document.querySelector                   ('#daily-start') ;
+const dailyHistory = document.querySelector                   ('#daily-history') ;
+const masterHistory = document.querySelector                   ('#master-history') ;
+let latestMasterReview                                                     ;
 const hintButton = document.querySelector                   ('#hint') ;
 const guideButton = document.querySelector                   ('#training-start') ;
 const guideCard = document.getElementById('coach') ;
@@ -1482,6 +1588,10 @@ function renderDaily() {
   dailyDate.textContent = dailySelection === today ? '今天 · ' + dailySelection : dailySelection;
   const record = dailyRecords[dailySelection];
   const challenge = dailyForDay(dailySelection);
+  const slot = readSessionBook()[sessionId(0, dailySelection)];
+  const draft = restoreSession(challenge.level, slot?.active);
+  dailyStart.textContent = draft ? '继续挑战 · 已走 ' + draft.journal .length + ' 步 →' : '开始挑战 →';
+  dailyHistory.hidden = !restoreSession(challenge.level, slot?.latest);
   dailyBest.textContent = record ? '个人最佳：' + dailyString(record) : challenge.level.title + ' · 最短 ' + challenge.par + ' 步 · 上限 ' + challenge.level.stepLimit + ' 步';
   dailyList.replaceChildren(...keys.map((day, index) => {
     const score = dailyRecords[day];
@@ -1523,6 +1633,10 @@ async function shareDaily(day        ) {
 }
 
 function renderMasters() {
+  const sessionData = readSessionBook();
+  latestMasterReview = findLatestMasterReview(sessionData);
+  masterHistory.hidden = !latestMasterReview;
+  if (latestMasterReview) masterHistory.textContent = '复盘最近一局 · ' + latestMasterReview.level.title;
   for (const button of masterFilters.querySelectorAll                   ('button')) button.setAttribute('aria-pressed', String(button.dataset.filter === masterFilter));
   const schedule = levelIndex + 1 > catalog.masterFinal ? [...masterStages, ...Array.from({ length: 2 }, (_, slot) => {
     const stage = Math.floor(levelIndex / 10) * 10 + 5 + slot * 5;
@@ -1553,6 +1667,13 @@ function renderMasters() {
     title.textContent = level.title;
     const best = masterBest(index);
     const summary = document.createElement('em');
+    const active = restoreSession(level, sessionData[sessionId(index, null)]?.active);
+    if (active?.journal) {
+      const resume = document.createElement('em');
+      resume.className = 'master-resume-tag';
+      resume.textContent = '续玩 · 已走 ' + active.journal.length + ' 步';
+      info.append(resume);
+    }
     summary.textContent = (level.masterPar ? '最短 ' + level.masterPar + ' 步 / ' : '') + (level.stepLimit ?? 0) + ' 步上限 · ' + (best ? '最佳 ' + best + ' 步' : '等待首通');
     info.append(number, title, summary);
     if (level.interlocks) {
@@ -1573,9 +1694,65 @@ function openMasters() {
   masterDialog.showModal();
 }
 
+function readSessionBook() {
+  if (!storageHealthy) return memorySessions;
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) memorySessions = sessionBook(JSON.parse(raw));
+  } catch {}
+  return memorySessions;
+}
+
+function writeSessionBook(book             ) {
+  memorySessions = book;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(book));
+    storageHealthy = true;
+  } catch {
+    storageHealthy = false;
+  }
+}
+
+function openSavedGame(level       , key        , failures        ) {
+  const record = readSessionBook()[key]?.active;
+  const restored = restoreSession(level, record);
+  return restored && record ? { game: restored, seconds: record.seconds, record } : { game: createGame(level, failures), seconds: 0 };
+}
+
+function storeMasterSession(force = false) {
+  if (!game.journal?.length || practice) return;
+  if (game.status === 'playing' && game.journal.length === lastStoredMoves && (!currentDaily || elapsedPlay <= lastStoredSeconds || (!force && elapsedPlay - lastStoredSeconds < 5))) return;
+  const record = captureSession(game, elapsedPlay, Date.now());
+  if (!record) return;
+  const key = sessionId(levelIndex, currentDaily);
+  writeSessionBook(putSession(readSessionBook(), key, record));
+  if (game.journal.length !== lastStoredMoves) resumeBoard = false;
+  lastStoredMoves = game.journal.length;
+  lastStoredSeconds = elapsedPlay;
+}
+
+function flushMasterSession() {
+  if (game.status === 'playing') storeMasterSession(true);
+  else {
+    for (const event of game.events.splice(0)) consume(event);
+    recordResult();
+  }
+}
+
+function findLatestMasterReview(book             ) {
+  const candidates = Object.entries(book).filter(([key, slot]) => key.startsWith('stage:') && slot.latest)
+    .sort(([, left], [, right]) => right.latest .savedAt - left.latest .savedAt);
+  for (const [key, slot] of candidates) {
+    const level = authoredLevel(Number(key.slice(6)) - 1);
+    if (level && restoreSession(level, slot.latest)) return { level, record: slot.latest  };
+  }
+  return undefined;
+}
+
 function recordResult() {
   if (game.status === recorded) return;
   recorded = game.status;
+  storeMasterSession(true);
   if (!currentDaily && !practice) {
     try { localStorage.setItem(failureKey(), String(game.status === 'won' ? 0 : readFailures() + 1)); } catch {}
   }
@@ -2139,13 +2316,17 @@ function paintReview(index        ) {
 
 function openReview() {
   if (game.status === 'playing' || !game.journal?.length || !game.level.masterPar) return;
+  beginReview(game.level, game.journal, game.status === 'won');
+}
+
+function beginReview(level       , moves              , won         ) {
   reviewEpoch++;
-  reviewSession = { level: game.level, moves: [...game.journal], won: game.status === 'won' };
-  reviewRange.max = String(reviewSession.moves.length);
-  reviewAnalyze.hidden = reviewSession.won;
+  reviewSession = { level, moves: [...moves], won };
+  reviewRange.max = String(moves.length);
+  reviewAnalyze.hidden = won;
   reviewAnalyze.disabled = false;
-  reviewStatus.textContent = reviewSession.won ? '用掉 ' + reviewSession.moves.length + ' 步，最短 ' + game.level.masterPar + ' 步。' : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
-  paintReview(reviewSession.moves.length);
+  reviewStatus.textContent = won ? '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。' : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
+  paintReview(moves.length);
   reviewDialog.showModal();
 }
 
@@ -2307,6 +2488,9 @@ function updateWorkshop() {
 function updateControls() {
   previous.disabled = !currentDaily && !practice && levelIndex === 0;
   hintButton.disabled = game.status !== 'playing';
+  const savedText = game.status === 'playing' && game.level.masterPar ? !storageHealthy ? '仅本页保存' : resumeBoard ? '已恢复存档' : lastStoredMoves ? '进度已保存' : '自动存档' : '';
+  if (resumeStatus.textContent !== savedText) resumeStatus.textContent = savedText;
+  resumeStatus.hidden = !savedText;
   updateWorkshop();
   next.disabled = !currentDaily && !practice && levelIndex >= Number.MAX_SAFE_INTEGER - 1;
   const previousLabel = currentDaily || practice ? '← 回主线' : '← 上一关';
@@ -2334,6 +2518,7 @@ function frame(time        ) {
   }
   for (const event of game.events.splice(0)) consume(event);
   recordResult();
+  if (game.status === 'playing') storeMasterSession();
   updateCoach();
   const backdrop = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   backdrop.addColorStop(0, game.level.master ? '#4b395f' : theme.panel);
@@ -2472,10 +2657,11 @@ function setDailyAddress(day               ) {
   }
 }
 
-function load(index        , day                = null, training = false) {
+function load(index        , day                = null, training = false, restart = false) {
   if (!Number.isSafeInteger(index) || index < 0) return;
   for (const event of game.events.splice(0)) consume(event);
   recordResult();
+  if (game.status === 'playing') storeMasterSession(true);
   cancelDrag();
   levelIndex = index;
   practice = training;
@@ -2492,7 +2678,14 @@ function load(index        , day                = null, training = false) {
   hint = null;
   hintUntil = 0;
   applyTheme();
-  game = practice ? createGame(catalog.training) : dailyRound ? createGame(dailyRound.level) : createGame(levelAt(index), readFailures());
+  const key = sessionId(index, day);
+  if (restart && !training) writeSessionBook(discardDraft(readSessionBook(), key));
+  const start = training ? { game: createGame(catalog.training), seconds: 0, record: undefined } : openSavedGame(dailyRound?.level ?? levelAt(index), key, day ? 0 : readFailures());
+  game = start.game;
+  elapsedPlay = start.seconds;
+  lastStoredMoves = start.record?.moves.length ?? 0;
+  lastStoredSeconds = elapsedPlay;
+  resumeBoard = Boolean(start.record);
   recorded = 'playing';
   notice = '';
   noticeUntil = 0;
@@ -2520,18 +2713,33 @@ function startTraining() {
 guideButton.addEventListener('click', startTraining);
 document.getElementById('training-help') .addEventListener('click', startTraining);
 previous.addEventListener('click', () => load(currentDaily || practice ? levelIndex : levelIndex - 1));
-retry.addEventListener('click', () => load(levelIndex, currentDaily, practice));
+retry.addEventListener('click', () => load(levelIndex, currentDaily, practice, true));
 next.addEventListener('click', () => {
   if (practice) { cancelDrag(); helpDialog.showModal(); }
   else if (currentDaily) showDaily(currentDaily);
   else load(levelIndex + 1);
 });
 dailyButton.addEventListener('click', () => showDaily());
-document.getElementById('daily-start') .addEventListener('click', () => {
+dailyStart.addEventListener('click', () => {
   dailyDialog.close();
   load(levelIndex, dailySelection);
 });
 document.getElementById('daily-copy') .addEventListener('click', () => { void shareDaily(dailySelection); });
+dailyHistory.addEventListener('click', () => {
+  const level = dailyForDay(dailySelection).level;
+  const record = readSessionBook()[sessionId(0, dailySelection)]?.latest;
+  if (!record || !restoreSession(level, record)) return;
+  dailyDialog.close();
+  beginReview(level, record.moves, record.status === 'won');
+});
+masterHistory.addEventListener('click', () => {
+  if (!latestMasterReview) return;
+  const { level, record } = latestMasterReview;
+  masterDialog.close();
+  beginReview(level, record.moves, record.status === 'won');
+});
+window.addEventListener('pagehide', flushMasterSession);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushMasterSession(); });
 dailyLinkField.addEventListener('focus', () => dailyLinkField.select());
 resultShare.addEventListener('click', () => {
   if (currentDaily) showDaily(currentDaily);
@@ -2550,7 +2758,7 @@ helpButton.addEventListener('click', () => { cancelDrag(); helpDialog.showModal(
 soundButton.addEventListener('click', () => { sound.toggle(); updateSoundButton(); });
 resultAction.addEventListener('click', () => {
   if (practice) load(levelIndex, null, game.status === 'lost');
-  else if (currentDaily || game.status === 'lost') load(levelIndex, currentDaily);
+  else if (currentDaily || game.status === 'lost') load(levelIndex, currentDaily, false, true);
   else if (game.status === 'won') load(levelIndex + 1);
 });
 for (const tool of Object.keys(toolNames)          ) {
