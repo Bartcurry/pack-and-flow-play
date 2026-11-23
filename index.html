@@ -95,6 +95,20 @@
     .daily-date { display: grid; justify-items: center; gap: .8cqw; min-height: 11cqw; min-width: 0; padding: 1.2cqw 0; font-size: clamp(9px, 2.45cqw, 13px); }
     .daily-date strong { color: #ffda90; }
     .daily-date[aria-pressed="true"] { background: #604a46; border-color: #ffda90; }
+    .daily-view-tabs { display: flex; gap: 1.8cqw; margin: 0 0 2.45cqw; }
+    .daily-view-tabs button { flex: 1; min-height: max(28px, 8.7cqw); font-size: clamp(11px, 3.2cqw, 15px); }
+    .daily-view-tabs button[aria-pressed="true"] { border-color: #98d4c8; background: #2c4d53; color: #d1fff0; }
+    .daily-month-nav { display: grid; grid-template-columns: minmax(30px,10cqw) 1fr minmax(30px,10cqw); align-items: center; gap: 1.7cqw; }
+    .daily-month-nav h3 { margin: 0; color: #f8efd9; text-align: center; font-size: clamp(14px, 3.85cqw, 19px); }
+    .daily-month-nav button { min-height: max(28px, 8cqw); }
+    #daily-month-summary { margin: 1.8cqw 0 2cqw; color: #bde3dc; text-align: center; font-size: clamp(10px, 2.95cqw, 15px); }
+    .daily-month-weekdays { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 1.15cqw; margin: 0 0 1.2cqw; color: #b7ccd8; text-align: center; font-size: clamp(9px, 2.5cqw, 13px); }
+    .daily-month-day { position: relative; min-height: max(27px, 9.6cqw); gap: .35cqw; padding: .75cqw 0; font-size: clamp(11px, 3.15cqw, 16px); }
+    .daily-month-day strong { font-size: clamp(8px, 2.4cqw, 12px); }
+    .daily-date[data-draft="true"]::after { content: ""; position: absolute; top: .65cqw; right: .65cqw; width: 1.05cqw; height: 1.05cqw; border-radius: 50%; background: #a4ebc9; }
+    .daily-date { position: relative; }
+    .daily-month-day[aria-current="date"]:not([aria-pressed="true"]) { border-color: #8ecebb; }
+    .daily-month-day:disabled { border-color: #405668; background: #203140; }
     .daily-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 2cqw; }
     .daily-link { color: #f2f8fc; background: #142634; border: 1px solid #617a90; width: 100%; border-radius: 2cqw; padding: 2cqw; margin-top: 1.8cqw; }
     #daily-share-status:empty { display: none; }
@@ -229,8 +243,22 @@
     <dialog id="daily-dialog" aria-labelledby="daily-title">
       <header><div><span class="eyebrow">DAILY MASTER · 终局难度</span><h2 id="daily-title">每日极限挑战</h2></div><form method="dialog"><button type="submit" aria-label="关闭每日挑战">关闭</button></form></header>
       <section class="daily-hero"><h3 id="daily-date"></h3><p id="daily-best"></p><p id="daily-edition" hidden></p><p id="daily-coming" hidden></p></section>
-      <p class="intro">每天北京时间零点换一张棋盘。也可以补玩最近七天，或把当日棋盘发给朋友。</p>
+      <p class="intro">每天北京时间零点换一张棋盘。日历可以查看个人成绩，也能补玩往日挑战。</p>
+      <div class="daily-view-tabs" aria-label="挑战日期视图" role="group">
+        <button type="button" id="daily-recent-view" aria-controls="daily-list" aria-pressed="true">近 7 天</button>
+        <button type="button" id="daily-calendar-view" aria-controls="daily-calendar" aria-pressed="false">日历</button>
+      </div>
       <div class="daily-list" id="daily-list" aria-label="选择挑战日期"></div>
+      <section id="daily-calendar" aria-labelledby="daily-month-title" hidden>
+        <div class="daily-month-nav">
+          <button type="button" id="daily-month-previous" aria-label="上个月">←</button>
+          <h3 id="daily-month-title" aria-live="polite"></h3>
+          <button type="button" id="daily-month-next" aria-label="下个月">→</button>
+        </div>
+        <p id="daily-month-summary"></p>
+        <div class="daily-month-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="daily-list" id="daily-month-days" aria-label="本月挑战日期"></div>
+      </section>
       <p class="intro">每日只出终局级联锁题，无道具。通关一星，比最短解多一步以内两星，走到最短解三星；同用步才比较时间。</p>
       <div class="daily-actions"><button class="wide" id="daily-copy" type="button">复制链接</button><button class="primary wide" id="daily-start" type="button">开始挑战 →</button></div>
       <button type="button" class="wide session-history" id="daily-history" hidden>复盘此日最近一局</button>
@@ -1062,6 +1090,28 @@ export function dailyOffset(day        , delta        ) {
   return new Date((serial + delta) * DAY_MS).toISOString().slice(0, 10);
 }
 
+export function dailyMonthOffset(month        , delta        ) {
+  const serial = dailySerial(month + '-01');
+  if (serial === null || !Number.isInteger(delta)) return null;
+  const date = new Date(serial * DAY_MS);
+  date.setUTCMonth(date.getUTCMonth() + delta);
+  const year = date.getUTCFullYear();
+  return year >= 1970 && year <= 9999 ? date.toISOString().slice(0, 7) : null;
+}
+
+export function dailyMonthGrid(month        )                    {
+  const first = month + '-01';
+  const serial = dailySerial(first);
+  if (serial === null) return [];
+  const start = new Date(serial * DAY_MS);
+  const count = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+  const leading = (start.getUTCDay() + 6) % 7;
+  return Array.from({ length: Math.ceil((leading + count) / 7) * 7 }, (_, slot) => {
+    const index = slot - leading;
+    return index >= 0 && index < count ? dailyOffset(first, index) : null;
+  });
+}
+
 export function makeDaily(day        , series         , startSerial = 0) {
   const serial = dailySerial(day);
   if (serial === null) throw Error('Invalid daily date');
@@ -1671,18 +1721,28 @@ const reviewGrid = document.getElementById('review-grid') ;
 const reviewGates = document.getElementById('review-gates') ;
 const reviewInfo = document.getElementById('review-info') ;
 const reviewStatus = document.getElementById('review-status') ;
+const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
 const reviewRange = document.querySelector                  ('#review-range') ;
 const reviewPrevious = document.querySelector                   ('#review-previous') ;
 const reviewNext = document.querySelector                   ('#review-next') ;
 const reviewAnalyze = document.querySelector                   ('#review-analyze') ;
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
-                                                                                                              
+                                                                                                                                  
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
 const dailyButton = document.querySelector                   ('#daily') ;
 const dailyDialog = document.querySelector                   ('#daily-dialog') ;
 const dailyList = document.getElementById('daily-list') ;
+const dailyRecentView = document.querySelector                   ('#daily-recent-view') ;
+const dailyCalendarView = document.querySelector                   ('#daily-calendar-view') ;
+const dailyCalendar = document.getElementById('daily-calendar') ;
+const dailyMonthTitle = document.getElementById('daily-month-title') ;
+const dailyMonthSummary = document.getElementById('daily-month-summary') ;
+const dailyMonthDays = document.getElementById('daily-month-days') ;
+const dailyMonthPrevious = document.querySelector                   ('#daily-month-previous') ;
+const dailyMonthNext = document.querySelector                   ('#daily-month-next') ;
+let calendarOpen = false;
 const dailyDate = document.getElementById('daily-date') ;
 const dailyBest = document.getElementById('daily-best') ;
 const dailyEdition = document.getElementById('daily-edition') ;
@@ -1949,10 +2009,74 @@ function dailyURL(day        ) {
   return link.href;
 }
 
+function dailyDateButton(day        , today        , sessions             , month = false) {
+  const future = day > today;
+  const score = future ? undefined : dailyRecords[day];
+  const draftRecord = future ? undefined : sessions[sessionId(0, day)]?.active;
+  const draft = draftRecord && restoreSession(dailyForDay(day).level, draftRecord);
+  const button = makeButton('', () => {
+    if (day > chinaDay()) return;
+    dailySelection = day;
+    renderDaily();
+    (month ? dailyMonthDays : dailyList).querySelector                   ('[aria-pressed="true"]')?.focus();
+  }, month ? 'daily-date daily-month-day' : 'daily-date');
+  button.disabled = future;
+  button.setAttribute('aria-pressed', String(day === dailySelection));
+  if (day === today) button.setAttribute('aria-current', 'date');
+  if (draft) button.dataset.draft = 'true';
+  const label = (day === today ? '今天 · ' : '') + day;
+  button.setAttribute('aria-label', label + (future ? ' · 尚未开放' : score ? ' · ' + score.medals + ' 星' : ' · 未通关') + (draft ? ' · 有未完局' : ''));
+  const number = document.createElement('span');
+  number.textContent = month ? String(Number(day.slice(8))) : day === today ? '今天' : day.slice(5);
+  const medals = document.createElement('strong');
+  medals.textContent = score ? '★' + score.medals : draft ? '续' : future ? '' : '·';
+  button.append(number, medals);
+  return button;
+}
+
+function renderDailyPicker(today        , sessions             ) {
+  dailyRecentView.setAttribute('aria-pressed', String(!calendarOpen));
+  dailyCalendarView.setAttribute('aria-pressed', String(calendarOpen));
+  dailyList.hidden = calendarOpen;
+  dailyCalendar.hidden = !calendarOpen;
+
+  if (!calendarOpen) {
+    const days = Array.from({ length: 7 }, (_, index) => dailyOffset(today, -index));
+    if (!days.includes(dailySelection)) days.push(dailySelection);
+    dailyList.replaceChildren(...days.map(day => dailyDateButton(day, today, sessions)));
+    return;
+  }
+
+  const month = dailySelection.slice(0, 7);
+  const [year, number] = month.split('-');
+  dailyMonthTitle.textContent = year + ' 年 ' + Number(number) + ' 月';
+  const next = dailyMonthOffset(month, 1);
+  dailyMonthPrevious.disabled = dailyMonthOffset(month, -1) === null;
+  dailyMonthNext.disabled = next === null || next > today.slice(0, 7);
+  const days = dailyMonthGrid(month);
+  const scores = days.flatMap(day => day && day <= today && dailyRecords[day] ? [dailyRecords[day]] : []);
+  dailyMonthSummary.textContent = scores.length + ' 天通关 · ' + scores.filter(score => score.medals === 3).length + ' 天三星';
+  dailyMonthDays.replaceChildren(...days.map(day => {
+    if (day) return dailyDateButton(day, today, sessions, true);
+    const space = document.createElement('span');
+    space.setAttribute('aria-hidden', 'true');
+    return space;
+  }));
+}
+
+function changeDailyMonth(delta        ) {
+  const month = dailyMonthOffset(dailySelection.slice(0, 7), delta);
+  const today = chinaDay();
+  if (!month || month > today.slice(0, 7)) return;
+  const selected = dailyMonthGrid(month).findLast(day => day !== null && day <= today);
+  if (selected) {
+    dailySelection = selected;
+    renderDaily();
+  }
+}
+
 function renderDaily() {
   const today = chinaDay();
-  const keys = Array.from({ length: 7 }, (_, index) => dailyOffset(today, -index));
-  if (!keys.includes(dailySelection)) keys.push(dailySelection);
   dailyDate.textContent = dailySelection === today ? '今天 · ' + dailySelection : dailySelection;
   const record = dailyRecords[dailySelection];
   const challenge = dailyForDay(dailySelection);
@@ -1975,20 +2099,7 @@ function renderDaily() {
   const upcoming = catalog.dailyNextBanks.find(entry => entry.start > today);
   dailyComing.hidden = !upcoming;
   dailyComing.textContent = upcoming ? '北京时间 ' + upcoming.start + ' 加入「' + upcoming.title + '」题库' : '';
-  dailyList.replaceChildren(...keys.map((day, index) => {
-    const score = dailyRecords[day];
-    const button = makeButton('', () => {
-      dailySelection = day; renderDaily();
-      dailyList.querySelector                   ('[aria-pressed="true"]')?.focus();
-    }, 'daily-date');
-    button.setAttribute('aria-pressed', String(day === dailySelection));
-    const label = document.createElement('span');
-    label.textContent = index === 0 ? '今天' : day.slice(5);
-    const medals = document.createElement('strong');
-    medals.textContent = score ? '★' + score.medals : '·';
-    button.append(label, medals);
-    return button;
-  }));
+  renderDailyPicker(today, sessions);
   dailyLinkField.value = dailyURL(dailySelection);
   dailyLinkField.hidden = true;
   dailyShareStatus.textContent = '';
@@ -2843,13 +2954,16 @@ function paintReview(index        ) {
 
 function openReview() {
   if (game.status === 'playing' || !game.journal?.length || !game.level.masterPar) return;
-  beginReview(game.level, game.journal, game.status === 'won', relayStart, !currentDaily && !relayToken);
+  beginReview(game.level, game.journal, game.status === 'won', { start: relayStart, allowsTrial: !currentDaily && !relayToken });
 }
 
-function beginReview(level       , moves              , won         , start = 0, allowsTrial = false) {
+function beginReview(level       , moves              , won         , options                                                                = {}) {
   if (reviewTrial) endReviewTrial(false);
+  const { start = 0, allowsTrial = false, returnDay } = options;
   reviewEpoch++;
-  reviewSession = { level, moves: [...moves], won, start, allowsTrial };
+  reviewSession = { level, moves: [...moves], won, start, allowsTrial, returnDay };
+  reviewClose.textContent = returnDay ? '返回挑战' : '关闭';
+  reviewClose.setAttribute('aria-label', returnDay ? '返回挑战日期' : '关闭复盘');
   reviewTrialButton.hidden = !allowsTrial;
   reviewRange.min = String(start);
   reviewRange.max = String(moves.length);
@@ -2930,7 +3044,12 @@ reviewTrialButton.addEventListener('click', startReviewTrial);
 reviewRange.addEventListener('input', () => paintReview(Number(reviewRange.value)));
 reviewPrevious.addEventListener('click', () => paintReview(Number(reviewRange.value) - 1));
 reviewNext.addEventListener('click', () => paintReview(Number(reviewRange.value) + 1));
-reviewDialog.addEventListener('close', () => { reviewEpoch++; });
+reviewDialog.addEventListener('close', () => {
+  if (reviewDialog.open) return;
+  reviewEpoch++;
+  const day = reviewSession?.returnDay;
+  if (day) showDaily(day);
+});
 reviewAnalyze.addEventListener('click', async () => {
   const session = reviewSession;
   if (!session) return;
@@ -3607,6 +3726,10 @@ next.addEventListener('click', () => {
   else load(levelIndex + 1);
 });
 dailyButton.addEventListener('click', () => showDaily());
+dailyRecentView.addEventListener('click', () => { calendarOpen = false; renderDaily(); });
+dailyCalendarView.addEventListener('click', () => { calendarOpen = true; renderDaily(); });
+dailyMonthPrevious.addEventListener('click', () => changeDailyMonth(-1));
+dailyMonthNext.addEventListener('click', () => changeDailyMonth(1));
 dailyStart.addEventListener('click', () => {
   dailyDialog.close();
   load(levelIndex, dailySelection);
@@ -3623,13 +3746,13 @@ dailyHistory.addEventListener('click', () => {
   const record = readSessionBook()[sessionId(0, dailySelection)]?.latest;
   if (!record || !restoreSession(level, record)) return;
   dailyDialog.close();
-  beginReview(level, record.moves, record.status === 'won');
+  beginReview(level, record.moves, record.status === 'won', { returnDay: dailySelection });
 });
 masterHistory.addEventListener('click', () => {
   if (!latestMasterReview) return;
   const { level, record } = latestMasterReview;
   masterDialog.close();
-  beginReview(level, record.moves, record.status === 'won', 0, true);
+  beginReview(level, record.moves, record.status === 'won', { allowsTrial: true });
 });
 window.addEventListener('pagehide', flushMasterSession);
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushMasterSession(); });
