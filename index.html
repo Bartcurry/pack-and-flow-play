@@ -216,6 +216,7 @@
     #review-gates span { box-shadow: inset 0 0 0 1.5px var(--review-exit-accent, transparent); }
     .review-actions { display: flex; gap: 2.1cqw; }
     .review-actions button { flex: 1 1 0; min-width: 0; min-height: 9.1cqw; margin-top: 2.7cqw; padding: 1cqw 1.35cqw; white-space: normal; }
+    .review-share-actions button { min-height: max(34px, 9.1cqw); }
     #review-share-status:empty { display: none; }
     .run-flags { position: absolute; top: 27.15%; right: 5.55%; display: flex; align-items: center; gap: 1.15cqw; }
     #relay-open { min-height: 5.65cqw; color: #f2dcff; border-color: #815fac; background: #503e64; padding: .2cqw 1.2cqw; font-size: clamp(9px, 2.4cqw, 14px); }
@@ -317,7 +318,10 @@
         <button type="button" id="review-analyze">定位走偏点</button>
         <button type="button" class="primary" id="review-trial" hidden>从这步试走</button>
       </div>
-      <button type="button" class="wide session-history" id="review-share" hidden>复制复盘链接</button>
+      <div class="review-actions review-share-actions" role="group" aria-label="分享棋谱">
+        <button type="button" class="session-history" id="review-share" hidden>复制整局链接</button>
+        <button type="button" class="session-history" id="review-share-step" hidden>复制此步链接</button>
+      </div>
       <input id="review-link" class="daily-link" type="url" readonly hidden aria-label="可复制的复盘链接">
       <p id="review-share-status" class="intro" role="status"></p>
     </dialog>
@@ -1656,8 +1660,26 @@ export function relayAddress(address        , stage        , day               ,
   return boardLink(address, stage, day, 'relay', token);
 }
 
-export function reviewAddress(address        , stage        , day               , token        ) {
-  return boardLink(address, stage, day, 'review', token);
+                                                                
+
+export function reviewAddress(address        , stage        , day               , token        , bookmark                 ) {
+  const href = boardLink(address, stage, day, 'review', token);
+  if (!bookmark) return href;
+  const link = new URL(href);
+  const fragment = new URLSearchParams(link.hash.slice(1));
+  fragment.set('step', String(bookmark.step));
+  if (bookmark.circuit) fragment.set('circuit', bookmark.circuit);
+  link.hash = fragment.toString();
+  return link.href;
+}
+
+export function readReviewBookmark(fragment                 , level       , moves        )                             {
+  const raw = fragment.get('step');
+  if (raw === null || !/^(0|[1-9]\d*)$/.test(raw)) return undefined;
+  const step = Number(raw);
+  if (!Number.isSafeInteger(step) || step > moves) return undefined;
+  const circuit = level.interlocks?.find(lock => lock.label === fragment.get('circuit'))?.label;
+  return { step, circuit };
 }
 
 
@@ -1837,6 +1859,7 @@ const reviewStatus = document.getElementById('review-status') ;
 const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
 const reviewHeading = document.getElementById('review-title') ;
 const reviewShare = document.querySelector                   ('#review-share') ;
+const reviewShareStep = document.querySelector                   ('#review-share-step') ;
 const reviewLinkField = document.querySelector                  ('#review-link') ;
 const reviewShareStatus = document.getElementById('review-share-status') ;
 const reviewRange = document.querySelector                  ('#review-range') ;
@@ -1850,7 +1873,7 @@ let reviewPlayback                    ;
 const reviewAnalyze = document.querySelector                   ('#review-analyze') ;
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
                                                          
-                                                                                                                           
+                                                                                                                                                      
                                                                                                                                                                                                                   
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
@@ -2996,7 +3019,8 @@ function paintReview(index        ) {
   for (const [slot, lock] of locks.entries()) updateCircuitButton(viewed, lock, reviewCircuitButtons[slot], circuit === lock);
   updateCircuitPanel(reviewCircuitPanel, viewed, circuit);
   reviewCircuitNavigation.hidden = !circuit;
-  const circuitSteps = circuit ? reviewSession.circuitSteps?.get(circuit) : undefined;
+  if (circuit) reviewSession.circuitSteps ??= circuitTransitionSteps(level, moves, reviewSession.start);
+  const circuitSteps = circuit && reviewSession.circuitSteps?.get(circuit);
   const earlier = adjacentReviewStep(circuitSteps, index, -1);
   const later = adjacentReviewStep(circuitSteps, index, 1);
   reviewPreviousCircuit.disabled = earlier === undefined;
@@ -3123,14 +3147,14 @@ function openReview() {
 function beginReview(level       , moves              , won         , options                = {}) {
   if (reviewTrial) endReviewTrial(false);
   stopReviewPlayback();
-  const { start = 0, allowsTrial = false, returnDay, shared = false } = options;
+  const { start = 0, allowsTrial = false, returnDay, shared = false, bookmark } = options;
   const dispatches = moves.flatMap((move, index) => move.to === null && index + 1 >= start ? [index + 1] : []);
   reviewEpoch++;
-  const session                = { ...options, level, moves: [...moves], dispatches, won, start, allowsTrial };
+  const circuit = level.interlocks?.find(lock => lock.label === bookmark?.circuit);
+  const session                = { ...options, level, moves: [...moves], dispatches, won, start, allowsTrial, circuit };
   reviewSession = session;
   reviewCircuitButtons = (level.interlocks ?? []).map(lock => makeCircuitButton(lock, reviewCircuitPanel.details.id, () => {
     session.circuit = session.circuit === lock ? undefined : lock;
-    if (session.circuit) session.circuitSteps ??= circuitTransitionSteps(session.level, session.moves, session.start);
     paintReview(Number(reviewRange.value));
   }));
   reviewCircuitGroup.replaceChildren(...reviewCircuitButtons.map(({ button }) => button));
@@ -3140,6 +3164,7 @@ function beginReview(level       , moves              , won         , options   
   reviewClose.textContent = closeLabel;
   reviewClose.setAttribute('aria-label', returnDay ? '返回挑战日期' : shared ? closeLabel : '关闭复盘');
   reviewShare.hidden = !options.source;
+  reviewShareStep.hidden = !options.source;
   reviewLinkField.hidden = true;
   reviewLinkField.value = '';
   reviewShareStatus.textContent = '';
@@ -3152,7 +3177,7 @@ function beginReview(level       , moves              , won         , options   
     ? level.title + ' · ' + moves.length + ' 步 · ' + (won ? '已通关' : '未过关')
     : won ? start ? '从接力点起用了 ' + (moves.length - start) + ' 步。' : '用掉 ' + moves.length + ' 步，最短 ' + level.masterPar + ' 步。'
       : '拖动进度条查看每一步，或让复盘找出从哪一步起预算不再够用。';
-  paintReview(shared ? start : moves.length);
+  paintReview(shared ? (bookmark?.step ?? start) : moves.length);
   if (!reviewDialog.open) reviewDialog.showModal();
 }
 
@@ -3222,21 +3247,27 @@ function endReviewTrial(reopen         ) {
   reviewDialog.showModal();
 }
 
-async function copyReviewLink() {
+async function copyReviewLink(atStep = false) {
   const session = reviewSession;
   if (!reviewDialog.open || !session?.source) return;
+  if (atStep) stopReviewPlayback();
+  const bookmark = atStep ? { step: Number(reviewRange.value), circuit: session.circuit?.label } : undefined;
   const token = encodeReview(session.level, session.moves);
   if (!token) {
     reviewShareStatus.textContent = '这局棋谱无法生成链接';
     return;
   }
-  const link = reviewAddress(location.href, session.source.index + 1, session.source.day, token);
+  const link = reviewAddress(location.href, session.source.index + 1, session.source.day, token, bookmark);
+  reviewLinkField.hidden = true;
   reviewLinkField.value = link;
+  reviewShareStatus.textContent = '';
   try {
     await navigator.clipboard.writeText(link);
-    if (reviewSession === session && reviewDialog.open) reviewShareStatus.textContent = '复盘链接已复制';
+    if (reviewSession === session && reviewDialog.open && reviewLinkField.value === link) {
+      reviewShareStatus.textContent = bookmark ? '第 ' + bookmark.step + ' 步链接已复制' : '整局链接已复制';
+    }
   } catch {
-    if (reviewSession !== session || !reviewDialog.open) return;
+    if (reviewSession !== session || !reviewDialog.open || reviewLinkField.value !== link) return;
     reviewLinkField.hidden = false;
     reviewLinkField.focus();
     reviewLinkField.select();
@@ -3247,6 +3278,7 @@ async function copyReviewLink() {
 reviewButton.addEventListener('click', openReview);
 reviewTrialButton.addEventListener('click', startReviewTrial);
 reviewShare.addEventListener('click', () => { void copyReviewLink(); });
+reviewShareStep.addEventListener('click', () => { void copyReviewLink(true); });
 reviewLinkField.addEventListener('focus', () => reviewLinkField.select());
 function updateReviewPlayback() {
   const playing = reviewPlayback !== undefined;
@@ -3970,13 +4002,16 @@ function clearReviewLink() {
   const fragment = new URLSearchParams(address.hash.slice(1));
   if (!fragment.has('review')) return;
   fragment.delete('review');
+  fragment.delete('step');
+  fragment.delete('circuit');
   if (relayToken && !fragment.has('relay')) fragment.set('relay', relayToken);
   address.hash = fragment.toString();
   try { history.replaceState(null, '', address); } catch {}
 }
 
 function showLinkedReview(address     ) {
-  const token = new URLSearchParams(address.hash.slice(1)).get('review');
+  const fragment = new URLSearchParams(address.hash.slice(1));
+  const token = fragment.get('review');
   if (token === null) return false;
   const day = address.searchParams.get('daily');
   const index = day === null ? relayStageIndex(address.searchParams) : levelIndex;
@@ -3988,7 +4023,8 @@ function showLinkedReview(address     ) {
     for (const level of candidates) {
       const board = level && decodeReview(level, token);
       if (board?.journal) {
-        beginReview(board.level, board.journal, board.status === 'won', { shared: true, source: { index, day } });
+        const bookmark = readReviewBookmark(fragment, board.level, board.journal.length);
+        beginReview(board.level, board.journal, board.status === 'won', { shared: true, source: { index, day }, bookmark });
         return true;
       }
     }
