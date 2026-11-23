@@ -160,12 +160,12 @@
     .master-preview { display: grid; grid-template-columns: repeat(var(--preview-cols),1fr); grid-template-rows: repeat(var(--preview-rows),1fr); gap: .4cqw; aspect-ratio: 1; padding: .8cqw; border-radius: 1.5cqw; background: #191d2b; }
     .master-preview i { display: block; border-radius: .5cqw; }
     #master-rules.circuit-status { display: flex; align-items: stretch; gap: .7cqw; padding: .35cqw; border-color: #5b8191; background: #142b3b; }
-    #master-rules .circuit-select { flex: 1; min-width: 0; border-color: #486073; border-radius: 1.6cqw; padding: 0 .35cqw; color: var(--circuit-color); background: #25394d; font-size: clamp(10px, 2.8cqw, 15px); line-height: 1.15; }
-    #master-rules .circuit-select[data-active="true"] { border-color: #537e76; background: #294b49; }
-    #master-rules .circuit-select[aria-expanded="true"] { border-color: var(--circuit-color); box-shadow: inset 0 -2px var(--circuit-color); }
-    #master-rules .circuit-select small { display: block; margin-top: .38cqw; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 720; color: #d5e1f1; }
+    .circuit-select { flex: 1; min-width: 0; border-color: #486073; border-radius: 1.6cqw; padding: 0 .35cqw; color: var(--circuit-color); background: #25394d; font-size: clamp(10px, 2.8cqw, 15px); line-height: 1.15; }
+    .circuit-select[data-active="true"] { border-color: #537e76; background: #294b49; }
+    .circuit-select[aria-expanded="true"] { border-color: var(--circuit-color); box-shadow: inset 0 -2px var(--circuit-color); }
+    .circuit-select small { display: block; margin-top: .38cqw; font-size: clamp(8px, 2.2cqw, 13px); font-weight: 720; color: #d5e1f1; }
     #circuit-details { position: absolute; inset: auto 5.55% 12.15%; height: 5.15%; display: grid; grid-template-columns: 6.8cqw minmax(0,1fr); align-items: center; gap: 1.35cqw; padding: .7cqw 1.15cqw; border: 1px solid #54778a; border-left: 3px solid var(--circuit-color); border-radius: 1.8cqw; background: #192f41; color: #e5edf5; font-size: clamp(9px, 2.75cqw, 14px); line-height: 1.18; }
-    #circuit-label { color: var(--circuit-color); text-align: center; font-size: clamp(14px, 4.3cqw, 23px); line-height: 1; }
+    .circuit-label { color: var(--circuit-color); text-align: center; font-size: clamp(14px, 4.3cqw, 23px); line-height: 1; }
     #circuit-readout { display: grid; row-gap: .62cqw; }
     .circuit-detail-row { display: flex; align-items: center; gap: 1.15cqw; white-space: nowrap; }
     .circuit-detail-row span + span { border-left: 1px solid #527083; padding-left: 1.1cqw; }
@@ -204,6 +204,13 @@
     .review-transport button, .review-transport select { min-width: 0; min-height: max(27px, 8.5cqw); padding: 0 .45cqw; font-size: clamp(10px, 2.8cqw, 14px); }
     .review-transport select { border: 1px solid #5a7186; border-radius: 2cqw; background: #24384b; color: #f3f7fa; text-align: center; }
     .review-transport select:focus-visible { outline: 2px solid #ffcc77; outline-offset: 2px; }
+    #review-circuits { display: flex; gap: 1.25cqw; margin-top: 2.5cqw; }
+    #review-circuits button { min-height: max(32px, 9cqw); padding: .45cqw .35cqw; }
+    #review-circuit-details { display: grid; grid-template-columns: 6.8cqw minmax(0,1fr); align-items: center; gap: 1.5cqw; margin-top: 1.35cqw; padding: 1.25cqw 1.6cqw; border: 1px solid #54778a; border-left: 3px solid var(--circuit-color); border-radius: 1.8cqw; background: #192f41; color: #e5edf5; font-size: clamp(10px, 2.75cqw, 14px); }
+    #review-circuit-details .circuit-detail-row { flex-wrap: wrap; column-gap: 1.35cqw; }
+    #review-circuit-details .circuit-detail-row > span { border-left: 0; padding-left: 0; }
+    .review-circuit-focus { z-index: 1; border-radius: 1.25cqw; box-shadow: inset 0 0 0 1.5px var(--circuit-color); pointer-events: none; }
+    #review-gates span { box-shadow: inset 0 0 0 1.5px var(--review-exit-accent, transparent); }
     .review-actions { display: flex; gap: 2.1cqw; }
     .review-actions button { flex: 1 1 0; min-width: 0; min-height: 9.1cqw; margin-top: 2.7cqw; padding: 1cqw 1.35cqw; white-space: normal; }
     #review-share-status:empty { display: none; }
@@ -235,7 +242,7 @@
     <div class="run-flags"><button id="relay-open" type="button" aria-label="分享当前残局" hidden>接力</button><span id="resume-status" aria-live="polite" hidden></span></div>
     <section class="result" id="result" aria-labelledby="result-title" hidden><p class="sticker" id="result-tag"></p><h2 id="result-title"></h2><p id="result-detail"></p><button class="primary" id="result-action" type="button">继续</button><button class="secondary" id="result-review" type="button" hidden>复盘这局</button><button class="secondary" id="result-share" type="button" hidden>分享本期挑战</button></section>
     <section id="circuit-details" aria-label="所选联锁线路详情" hidden>
-      <strong id="circuit-label"></strong>
+      <strong id="circuit-label" class="circuit-label"></strong>
       <div id="circuit-readout" aria-live="polite">
         <div id="circuit-inputs" class="circuit-detail-row"></div>
         <div id="circuit-outputs" class="circuit-detail-row"></div>
@@ -291,6 +298,14 @@
         <select id="review-speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
         <button type="button" id="review-next-dispatch">下次发货</button>
       </div>
+      <div id="review-circuits" role="group" aria-label="棋谱联锁线路" hidden></div>
+      <section id="review-circuit-details" aria-label="棋谱所选线路详情" aria-live="polite" hidden>
+        <strong id="review-circuit-label" class="circuit-label"></strong>
+        <div>
+          <div id="review-circuit-inputs" class="circuit-detail-row"></div>
+          <div id="review-circuit-outputs" class="circuit-detail-row"></div>
+        </div>
+      </section>
       <div class="review-actions">
         <button type="button" id="review-analyze">定位走偏点</button>
         <button type="button" class="primary" id="review-trial" hidden>从这步试走</button>
@@ -1727,13 +1742,17 @@ const masterTally = document.getElementById('master-tally') ;
 let masterFilter                                                           = 'all';
                                                                                                              
 const workshopBar = document.getElementById('master-rules') ;
-const circuitDetails = document.getElementById('circuit-details') ;
-const circuitLabel = document.getElementById('circuit-label') ;
-const circuitInputs = document.getElementById('circuit-inputs') ;
-const circuitOutputs = document.getElementById('circuit-outputs') ;
+                                                                                            
+                                                                                                            
+const playCircuitPanel               = {
+  details: document.getElementById('circuit-details') ,
+  label: document.getElementById('circuit-label') ,
+  inputs: document.getElementById('circuit-inputs') ,
+  outputs: document.getElementById('circuit-outputs') 
+};
 let inspectedCircuit                   = null;
 let workshopLevel               = null;
-let circuitButtons                                                                           = [];
+let circuitButtons                  = [];
 const toolBar = document.querySelector             ('nav.tools') ;
 const savedMasterScores = stored                               ('pack-flow.master-switch-ladder', null);
 const masterScores                         = savedMasterScores && typeof savedMasterScores === 'object' && !Array.isArray(savedMasterScores) ? savedMasterScores : {};
@@ -1775,6 +1794,14 @@ const reviewButton = document.querySelector                   ('#result-review')
 const reviewDialog = document.querySelector                   ('#review-dialog') ;
 const reviewGrid = document.getElementById('review-grid') ;
 const reviewGates = document.getElementById('review-gates') ;
+const reviewCircuitGroup = document.getElementById('review-circuits') ;
+const reviewCircuitPanel               = {
+  details: document.getElementById('review-circuit-details') ,
+  label: document.getElementById('review-circuit-label') ,
+  inputs: document.getElementById('review-circuit-inputs') ,
+  outputs: document.getElementById('review-circuit-outputs') 
+};
+let reviewCircuitButtons                  = [];
 const reviewInfo = document.getElementById('review-info') ;
 const reviewStatus = document.getElementById('review-status') ;
 const reviewClose = reviewDialog.querySelector                   ('button[type="submit"]') ;
@@ -1794,7 +1821,7 @@ const reviewAnalyze = document.querySelector                   ('#review-analyze
 const reviewTrialButton = document.querySelector                   ('#review-trial') ;
                                                          
                                                                                                                            
-                                                                                                                                                    
+                                                                                                                                                                         
 let reviewSession                           ;
 let reviewTrial                                                                                                           ;
 let reviewEpoch = 0;
@@ -2930,8 +2957,12 @@ function reviewTile(className        , x        , y        ) {
 
 function paintReview(index        ) {
   if (!reviewSession) return;
-  const { level, moves } = reviewSession;
+  const { level, moves, circuit } = reviewSession;
+  const locks = level.interlocks ?? [];
+  const visibleLocks = circuit ? [circuit] : locks;
   const viewed = replayAt(level, moves, index);
+  for (const [slot, lock] of locks.entries()) updateCircuitButton(viewed, lock, reviewCircuitButtons[slot], circuit === lock);
+  updateCircuitPanel(reviewCircuitPanel, viewed, circuit);
   const move = moves[index - 1];
   reviewRange.value = String(index);
   reviewRange.setAttribute('aria-valuetext', index + ' / ' + moves.length + ' 步');
@@ -2945,10 +2976,10 @@ function paintReview(index        ) {
   for (let row = 0; row < level.rows; row++) {
     for (let col = 0; col < level.cols; col++) nodes.push(reviewTile('review-cell', col, row));
   }
-  for (const lock of level.interlocks ?? []) {
+  for (const lock of visibleLocks) {
     for (const spot of lock.shutters) {
       const tile = reviewTile('review-shutter', spot.x, spot.y);
-      tile.textContent = lock.label + (interlockActive(viewed, lock) ? ' ↑' : ' ×');
+      tile.textContent = lock.label + (shutterOpen(viewed, spot.x, spot.y) ? ' ↑' : ' ×');
       tile.style.color = circuitColor(lock);
       nodes.push(tile);
     }
@@ -2975,7 +3006,7 @@ function paintReview(index        ) {
     node.textContent = item.isBarrier ? item.moveAxis === 'V' ? '↕' : '↔' : catalog.palette[item.color].code;
     nodes.push(node);
   }
-  for (const lock of level.interlocks ?? []) {
+  for (const lock of visibleLocks) {
     for (const spot of lock.plates) {
       const tile = reviewTile('review-plate', spot.x, spot.y);
       const wanted = plateCargo(level, spot);
@@ -2987,7 +3018,7 @@ function paintReview(index        ) {
     }
     for (const spot of lock.releasePlates ?? []) {
       const tile = reviewTile('review-release', spot.x, spot.y);
-      tile.textContent = lock.label + '↥';
+      tile.textContent = lock.label + '↥' + (plateHeld(viewed, spot) ? '×' : '✓');
       tile.style.color = circuitColor(lock);
       nodes.push(tile);
     }
@@ -3003,6 +3034,15 @@ function paintReview(index        ) {
     exit.textContent = '↑';
     nodes.push(exit);
   }
+  if (circuit) {
+    const points = [...circuit.plates, ...(circuit.releasePlates ?? []), ...circuit.shutters];
+    for (const spot of points) {
+      const focus = reviewTile('review-circuit-focus', spot.x, spot.y);
+      focus.setAttribute('aria-hidden', 'true');
+      focus.style.setProperty('--circuit-color', circuitColor(circuit));
+      nodes.push(focus);
+    }
+  }
   const exits = level.gates.map(col => {
     const sign = document.createElement('span');
     const opened = exitOpen(viewed, col);
@@ -3010,6 +3050,7 @@ function paintReview(index        ) {
     sign.textContent = (opened ? '↑ ' : '× ') + permitted;
     sign.dataset.open = String(opened);
     sign.style.gridColumn = String(col + 1);
+    if (circuit?.exits.includes(col)) sign.style.setProperty('--review-exit-accent', circuitColor(circuit));
     sign.setAttribute('aria-label', '第 ' + (col + 1) + ' 列出口' + (opened ? '已开' : '关闭'));
     return sign;
   });
@@ -3037,7 +3078,14 @@ function beginReview(level       , moves              , won         , options   
   const { start = 0, allowsTrial = false, returnDay, shared = false } = options;
   const dispatches = moves.flatMap((move, index) => move.to === null && index + 1 >= start ? [index + 1] : []);
   reviewEpoch++;
-  reviewSession = { ...options, level, moves: [...moves], dispatches, won, start, allowsTrial };
+  const session                = { ...options, level, moves: [...moves], dispatches, won, start, allowsTrial };
+  reviewSession = session;
+  reviewCircuitButtons = (level.interlocks ?? []).map(lock => makeCircuitButton(lock, reviewCircuitPanel.details.id, () => {
+    session.circuit = session.circuit === lock ? undefined : lock;
+    paintReview(Number(reviewRange.value));
+  }));
+  reviewCircuitGroup.replaceChildren(...reviewCircuitButtons.map(({ button }) => button));
+  reviewCircuitGroup.hidden = !reviewCircuitButtons.length;
   reviewHeading.textContent = shared ? '分享棋谱' : '局后复盘';
   const closeLabel = returnDay ? '返回挑战' : shared ? '返回游戏' : '关闭';
   reviewClose.textContent = closeLabel;
@@ -3158,7 +3206,9 @@ function updateReviewPlayback() {
   if (reviewPlay.textContent !== label) reviewPlay.textContent = label;
   reviewPlay.disabled = reviewAnalyze.disabled;
   const speech = playing ? 'off' : 'polite';
-  if (reviewInfo.getAttribute('aria-live') !== speech) reviewInfo.setAttribute('aria-live', speech);
+  for (const target of [reviewInfo, reviewCircuitPanel.details]) {
+    if (target.getAttribute('aria-live') !== speech) target.setAttribute('aria-live', speech);
+  }
 }
 
 function stopReviewPlayback() {
@@ -3402,6 +3452,62 @@ function selectCircuit(lock                  ) {
   updateWorkshop();
 }
 
+function makeCircuitButton(lock           , detailsId        , select            )                {
+  const button = makeButton('', select, 'circuit-select');
+  const status = document.createElement('strong');
+  const count = document.createElement('small');
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-controls', detailsId);
+  button.title = '查看 ' + lock.label + ' 线路';
+  button.style.setProperty('--circuit-color', circuitColor(lock));
+  button.append(status, count);
+  return { button, status, count };
+}
+
+function updateCircuitButton(board      , lock           , { button, status, count }               , selected         ) {
+  const powered = interlockActive(board, lock);
+  const pressed = lock.plates.filter(point => plateHeld(board, point)).length;
+  const release = lock.releasePlates ?? [];
+  const free = release.filter(point => !plateHeld(board, point)).length;
+  const title = lock.label + ' · ' + (powered ? '通电' : '断电');
+  const detail = '压 ' + pressed + '/' + lock.plates.length + (release.length ? ' · 松 ' + free + '/' + release.length : '');
+  if (status.textContent !== title) status.textContent = title;
+  if (count.textContent !== detail) count.textContent = detail;
+  if (button.dataset.active !== String(powered)) button.dataset.active = String(powered);
+  if (button.getAttribute('aria-expanded') !== String(selected)) button.setAttribute('aria-expanded', String(selected));
+}
+
+function updateCircuitPanel({ details, label, inputs, outputs }              , board      , lock            ) {
+  details.hidden = !lock;
+  if (!lock) return;
+  const coordinate = (point       ) => (point.x + 1) + '列' + (point.y + 1) + '行';
+  const condition = (point               , release         ) => {
+    const held = plateHeld(board, point);
+    const wanted = plateCargo(board.level, point);
+    if (wanted) return { title: catalog.palette[wanted.color].label + '货 ' + coordinate(point), state: held ? '到位' : '未到', ready: held };
+    return {
+      title: (release ? '松 ' : '压 ') + coordinate(point),
+      state: release ? held ? '未松' : '已松' : held ? '已压' : '未压',
+      ready: release ? !held : held
+    };
+  };
+  if (label.textContent !== lock.label) {
+    label.textContent = lock.label;
+    details.style.setProperty('--circuit-color', circuitColor(lock));
+  }
+  circuitDetailRow(inputs, [...lock.plates.map(point => condition(point, false)), ...(lock.releasePlates ?? []).map(point => condition(point, true))]);
+  circuitDetailRow(outputs, [
+    ...lock.shutters.map(point => {
+      const ready = shutterOpen(board, point.x, point.y);
+      return { title: coordinate(point) + '闸门', state: ready ? '开启' : '关闭', ready };
+    }),
+    ...lock.exits.map(column => {
+      const ready = exitOpen(board, column);
+      return { title: (column + 1) + '列出口', state: ready ? '开启' : '关闭', ready };
+    })
+  ]);
+}
+
 function updateWorkshop() {
   const { level } = game;
   const locks = level.master ? level.interlocks ?? [] : [];
@@ -3411,17 +3517,7 @@ function updateWorkshop() {
     workshopLevel = level;
     inspectedCircuit = null;
     workshopBar.classList.toggle('circuit-status', locks.length > 0);
-    circuitButtons = locks.map(lock => {
-      const button = makeButton('', () => selectCircuit(lock), 'circuit-select');
-      const status = document.createElement('strong');
-      const count = document.createElement('small');
-      button.setAttribute('aria-expanded', 'false');
-      button.setAttribute('aria-controls', circuitDetails.id);
-      button.title = '查看 ' + lock.label + ' 线路';
-      button.style.setProperty('--circuit-color', circuitColor(lock));
-      button.append(status, count);
-      return { button, status, count };
-    });
+    circuitButtons = locks.map(lock => makeCircuitButton(lock, playCircuitPanel.details.id, () => selectCircuit(lock)));
     const rules = ['↔ ↕ 挡板留在棋盘', '每格 1 步', '没有计时'].map(label => {
       const cell = document.createElement('span');
       cell.textContent = label;
@@ -3429,50 +3525,8 @@ function updateWorkshop() {
     });
     workshopBar.replaceChildren(...(circuitButtons.length ? circuitButtons.map(({ button }) => button) : rules));
   }
-  for (const [index, lock] of locks.entries()) {
-    const { button, status, count } = circuitButtons[index];
-    const powered = interlockActive(game, lock);
-    const pressed = lock.plates.filter(point => plateHeld(game, point)).length;
-    const release = lock.releasePlates ?? [];
-    const free = release.filter(point => !plateHeld(game, point)).length;
-    const title = lock.label + ' · ' + (powered ? '通电' : '断电');
-    const detail = '压 ' + pressed + '/' + lock.plates.length + (release.length ? ' · 松 ' + free + '/' + release.length : '');
-    const selected = String(inspectedCircuit === lock);
-    if (status.textContent !== title) status.textContent = title;
-    if (count.textContent !== detail) count.textContent = detail;
-    if (button.dataset.active !== String(powered)) button.dataset.active = String(powered);
-    if (button.getAttribute('aria-expanded') !== selected) button.setAttribute('aria-expanded', selected);
-  }
-
-  const lock = inspectedCircuit;
-  circuitDetails.hidden = !lock;
-  if (!lock) return;
-  const coordinate = (point       ) => (point.x + 1) + '列' + (point.y + 1) + '行';
-  const condition = (point               , release         ) => {
-    const held = plateHeld(game, point);
-    const wanted = plateCargo(level, point);
-    if (wanted) return { title: catalog.palette[wanted.color].label + '货 ' + coordinate(point), state: held ? '到位' : '未到', ready: held };
-    return {
-      title: (release ? '松 ' : '压 ') + coordinate(point),
-      state: release ? held ? '未松' : '已松' : held ? '已压' : '未压',
-      ready: release ? !held : held
-    };
-  };
-  if (circuitLabel.textContent !== lock.label) {
-    circuitLabel.textContent = lock.label;
-    circuitDetails.style.setProperty('--circuit-color', circuitColor(lock));
-  }
-  circuitDetailRow(circuitInputs, [...lock.plates.map(point => condition(point, false)), ...(lock.releasePlates ?? []).map(point => condition(point, true))]);
-  circuitDetailRow(circuitOutputs, [
-    ...lock.shutters.map(point => {
-      const ready = shutterOpen(game, point.x, point.y);
-      return { title: coordinate(point) + '闸门', state: ready ? '开启' : '关闭', ready };
-    }),
-    ...lock.exits.map(column => {
-      const ready = exitOpen(game, column);
-      return { title: (column + 1) + '列出口', state: ready ? '开启' : '关闭', ready };
-    })
-  ]);
+  for (const [index, lock] of locks.entries()) updateCircuitButton(game, lock, circuitButtons[index], inspectedCircuit === lock);
+  updateCircuitPanel(playCircuitPanel, game, inspectedCircuit ?? undefined);
 }
 
 workshopBar.addEventListener('keydown', event => {
