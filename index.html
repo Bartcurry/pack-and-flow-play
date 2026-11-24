@@ -2006,22 +2006,30 @@ function relayStageIndex(query                 ) {
   return requested !== null && /^[1-9]\d{0,14}$/.test(requested) ? Number(requested) - 1 : null;
 }
 const linkedStage = relayStageIndex(startingQuery);
-let practice               = !currentDaily && linkedStage === null && startingQuery.get('practice') === 'extreme' ? 'extreme' : false;
+let practice               = !currentDaily && startingQuery.get('practice') === 'extreme' ? 'extreme' : false;
 let levelIndex = !currentDaily && linkedStage !== null ? linkedStage : Number.isSafeInteger(lastStage) && lastStage >= 0 ? lastStage : 0;
 const toolButtons                                  = { MAGNET: document.querySelector                   ('#magnet') , SHUFFLE_BELT: document.querySelector                   ('#shuffle') , EXPAND_SLOT: document.querySelector                   ('#expand')  };
 const toolNames                       = { MAGNET: '磁力', SHUFFLE_BELT: '刷新', EXPAND_SLOT: '扩容' };
 let storageHealthy = true;
 let memorySessions = sessionBook(stored(SESSION_KEY, {}));
+const EXTREME_DRAFT_KEY = 'pack-flow.extreme-practice.draft.v1';
+let extremeStorageHealthy = true;
+let memoryExtremeDraft                           ;
 const initialLevel = practiceLevel(practice) ?? dailyRound?.level ?? levelAt(levelIndex);
 const relayRequest = new URLSearchParams(location.hash.slice(1)).get('relay');
 const archiveParam = startingQuery.get('archive');
 const archiveRequest = archiveParam === '1' ? catalog.masterLegacyFinal : Number(archiveParam);
-const initialSelection = selectBoard(levelIndex, currentDaily, initialLevel, linkedStage !== null || currentDaily ? relayRequest : null, linkedStage !== null && archivedFinals.includes(archiveRequest) ? archiveRequest : undefined);
+const linkedArchive = linkedStage !== null && archivedFinals.includes(archiveRequest) ? archiveRequest : undefined;
+let extremeReturnArchive = practice === 'extreme' ? linkedArchive : undefined;
+const initialSelection = selectBoard(levelIndex, currentDaily, initialLevel,
+  !practice && (linkedStage !== null || currentDaily) ? relayRequest : null, practice ? undefined : linkedArchive);
 const initialRelay = initialSelection.relay;
 let archivedMaster = initialSelection.archived;
 let relayToken = initialRelay ? relayRequest : null;
 let relayStart = initialRelay?.journal?.length ?? 0;
-const initial = practice || initialRelay ? { game: initialRelay ?? createGame(initialSelection.level), seconds: 0, record: undefined } : openSavedGame(initialSelection.level, stageSession(levelIndex, currentDaily, initialSelection.level, archivedMaster), currentDaily ? 0 : readFailures());
+const initial = practice === 'extreme' ? openExtremePractice()
+  : initialRelay ? { game: initialRelay, seconds: 0, record: undefined }
+  : openSavedGame(initialSelection.level, stageSession(levelIndex, currentDaily, initialSelection.level, archivedMaster), currentDaily ? 0 : readFailures());
 let game = initial.game;
 elapsedPlay = initial.seconds;
 let lastStoredMoves = initial.record?.moves.length ?? 0;
@@ -2365,8 +2373,10 @@ function renderDaily() {
 
 function showDaily(day = chinaDay()) {
   cancelDrag();
+  if (practice === 'extreme') flushMasterSession();
   dailySelection = day;
   renderDaily();
+  renderExtremeEntry();
   dailyDialog.showModal();
 }
 
@@ -2499,6 +2509,7 @@ function openMasters() {
   flushMasterSession();
   if (stageDialog.open) stageDialog.close();
   renderMasters();
+  renderExtremeEntry();
   masterDialog.showModal();
 }
 
@@ -2521,6 +2532,35 @@ function writeSessionBook(book             ) {
   }
 }
 
+function readExtremeDraft() {
+  const record = extremeStorageHealthy ? stored                           (EXTREME_DRAFT_KEY, undefined) : memoryExtremeDraft;
+  const board = restoreSession(catalog.extremePractice, record);
+  return record && board?.status === 'playing' ? { game: board, seconds: record.seconds, record } : undefined;
+}
+
+function writeExtremeDraft(record                ) {
+  memoryExtremeDraft = record;
+  try {
+    if (record) localStorage.setItem(EXTREME_DRAFT_KEY, JSON.stringify(record));
+    else localStorage.removeItem(EXTREME_DRAFT_KEY);
+    extremeStorageHealthy = true;
+  } catch {
+    extremeStorageHealthy = false;
+  }
+}
+
+function openExtremePractice(restart = false) {
+  if (restart) writeExtremeDraft();
+  const saved = restart ? undefined : readExtremeDraft();
+  return saved ?? { game: createGame(catalog.extremePractice), seconds: 0, record: undefined };
+}
+
+function renderExtremeEntry() {
+  const draft = readExtremeDraft()?.record;
+  const title = draft ? '继续八货练习 · 已走 ' + draft.moves.length + ' 步' : '八货极限练习 · 最短 ' + catalog.extremePractice.masterPar + ' 步';
+  for (const id of ['daily-practice', 'master-practice']) document.getElementById(id) .textContent = title;
+}
+
 function openSavedGame(level       , key        , failures        ) {
   const record = readSessionBook()[key]?.active;
   const restored = restoreSession(level, record);
@@ -2528,19 +2568,23 @@ function openSavedGame(level       , key        , failures        ) {
 }
 
 function storeMasterSession(force = false) {
-  if (!game.journal?.length || practice || relayToken || reviewTrial) return;
+  if (!game.journal?.length || practice === 'guide' || relayToken || reviewTrial) return;
   if (game.status === 'playing' && game.journal.length === lastStoredMoves && (!currentDaily || elapsedPlay <= lastStoredSeconds || (!force && elapsedPlay - lastStoredSeconds < 5))) return;
   const record = captureSession(game, elapsedPlay, Date.now());
   if (!record) return;
-  const key = stageSession(levelIndex, currentDaily, game.level, archivedMaster);
-  const book = readSessionBook();
-  let best                           ;
-  if (currentDaily && record.status !== 'playing') {
-    const score = dailyRecords[currentDaily];
-    best = dailyBestReplay(game.level, book[key], score);
-    if (!best && matchesDailyScore(record, score)) best = record;
+  if (practice === 'extreme') {
+    writeExtremeDraft(record.status === 'playing' ? record : undefined);
+  } else {
+    const key = stageSession(levelIndex, currentDaily, game.level, archivedMaster);
+    const book = readSessionBook();
+    let best                           ;
+    if (currentDaily && record.status !== 'playing') {
+      const score = dailyRecords[currentDaily];
+      best = dailyBestReplay(game.level, book[key], score);
+      if (!best && matchesDailyScore(record, score)) best = record;
+    }
+    writeSessionBook(putSession(book, key, record, best));
   }
-  writeSessionBook(putSession(book, key, record, best));
   if (game.journal.length !== lastStoredMoves) resumeBoard = false;
   lastStoredMoves = game.journal.length;
   lastStoredSeconds = elapsedPlay;
@@ -3850,7 +3894,11 @@ function updateControls() {
   rotationDock.hidden = !game.level.turntables?.length;
   rotateButton.classList.toggle('hinted', hint?.action === 'turn' && hintUntil > now);
   rotateButton.disabled = game.status !== 'playing' || !game.items.some(item => atTurntable(game, item));
-  const savedText = reviewTrial ? '试走 · 不计分' : practice === 'extreme' ? '极限练习 · 不计分' : relayToken ? '接力 · 不计分' : game.status === 'playing' && game.level.masterPar ? !storageHealthy ? '仅本页保存' : resumeBoard ? '已恢复存档' : lastStoredMoves ? '进度已保存' : '自动存档' : '';
+  const extremeStatus = !extremeStorageHealthy ? '练习 · 仅本页保存'
+    : resumeBoard ? '练习 · 已恢复存档'
+    : lastStoredMoves && game.status === 'playing' ? '练习 · 进度已保存'
+    : '极限练习 · 不计分';
+  const savedText = reviewTrial ? '试走 · 不计分' : practice === 'extreme' ? extremeStatus : relayToken ? '接力 · 不计分' : game.status === 'playing' && game.level.masterPar ? !storageHealthy ? '仅本页保存' : resumeBoard ? '已恢复存档' : lastStoredMoves ? '进度已保存' : '自动存档' : '';
   if (resumeStatus.textContent !== savedText) resumeStatus.textContent = savedText;
   resumeStatus.hidden = !savedText;
   relayButton.hidden = Boolean(reviewTrial || practice) || !(game.status === 'playing' && game.movesLeft && game.level.masterPar && game.journal?.length);
@@ -4147,10 +4195,10 @@ function setDailyAddress(day               , token                = null) {
   else link.searchParams.delete('practice');
   link.searchParams.delete('archive');
   if (!token) {
-    if (archivedMaster) {
-      link.searchParams.set('stage', String(levelIndex + 1));
-      link.searchParams.set('archive', archivedMaster === catalog.masterLegacyFinal ? '1' : String(archivedMaster));
-    } else link.searchParams.delete('stage');
+    const archive = practice === 'extreme' ? extremeReturnArchive : archivedMaster;
+    if (practice === 'extreme' || archive) link.searchParams.set('stage', String(levelIndex + 1));
+    else link.searchParams.delete('stage');
+    if (archive) link.searchParams.set('archive', archive === catalog.masterLegacyFinal ? '1' : String(archive));
     if (new URLSearchParams(link.hash.slice(1)).has('relay')) link.hash = '';
   }
   if (link.href !== location.href) {
@@ -4166,6 +4214,8 @@ function load(index        , day                = null, mode               = fal
   if (game.status === 'playing') storeMasterSession(true);
   cancelDrag();
   levelIndex = index;
+  if (mode === 'extreme' && practice !== 'extreme') extremeReturnArchive = archivedMaster;
+  else if (mode !== 'extreme') extremeReturnArchive = undefined;
   practice = mode;
   currentDaily = day;
   dailyRound = day ? dailyForDay(day) : null;
@@ -4184,7 +4234,9 @@ function load(index        , day                = null, mode               = fal
   applyTheme();
   const key = stageSession(index, day, level, archivedMaster);
   if (restart && !mode && !relayToken) writeSessionBook(discardDraft(readSessionBook(), key));
-  const start = mode || relay ? { game: relay ?? createGame(level), seconds: 0, record: undefined } : openSavedGame(level, key, day ? 0 : readFailures());
+  const start = mode === 'extreme' ? openExtremePractice(restart)
+    : mode || relay ? { game: relay ?? createGame(level), seconds: 0, record: undefined }
+    : openSavedGame(level, key, day ? 0 : readFailures());
   elapsedPlay = start.seconds;
   lastStoredMoves = start.record?.moves.length ?? 0;
   lastStoredSeconds = elapsedPlay;
@@ -4286,6 +4338,7 @@ document.getElementById('training-help') .addEventListener('click', startTrainin
 previous.addEventListener('click', () => {
   if (reviewTrial) endReviewTrial(true);
   else if (relayToken) load(levelIndex, currentDaily);
+  else if (practice === 'extreme') load(levelIndex, null, false, false, null, extremeReturnArchive);
   else load(currentDaily || practice ? levelIndex : levelIndex - 1);
 });
 retry.addEventListener('click', () => {
@@ -4386,7 +4439,6 @@ resultShare.addEventListener('click', () => {
 });
 for (const [id, dialog] of [['daily-practice', dailyDialog], ['master-practice', masterDialog]]         ) {
   const button = document.getElementById(id) ;
-  button.textContent = '八货极限练习 · 最短 ' + catalog.extremePractice.masterPar + ' 步';
   button.addEventListener('click', () => {
     dialog.close();
     load(levelIndex, null, 'extreme');
@@ -4409,7 +4461,7 @@ resultAction.addEventListener('click', () => {
     if (game.status === 'lost') undoReviewTrial();
     else endReviewTrial(true);
   } else if (relayToken) load(levelIndex, currentDaily, false, false, game.status === 'lost' ? relayToken : null);
-  else if (practice === 'extreme') load(levelIndex, null, 'extreme');
+  else if (practice === 'extreme') load(levelIndex, null, 'extreme', true);
   else if (practice) load(levelIndex, null, game.status === 'lost' ? 'guide' : false);
   else if (currentDaily || game.status === 'lost') load(levelIndex, currentDaily, false, true, null, archivedMaster);
   else if (game.status === 'won') load(levelIndex + 1);
