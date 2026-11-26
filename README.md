@@ -2,7 +2,7 @@
 
 万物打包师 · [浏览器直接试玩](https://bartcurry.github.io/pack-and-flow-play/)
 
-## v1.62.0
+## v1.63.0
 
-- [第 445 关 · 分段交接](https://bartcurry.github.io/pack-and-flow-play/?stage=445) 最短 325 步，上限 326 步。
-- [第 450 关 · 双队接驳验收](https://bartcurry.github.io/pack-and-flow-play/?stage=450) 最短 380 步，零容错。
+- [四闸终检 · 直接试打](https://bartcurry.github.io/pack-and-flow-play/?practice=final) 最短 520 步，上限 522 步。
+- 北京时间 2026-11-27 零点起，[每日极限挑战](https://bartcurry.github.io/pack-and-flow-play/?daily=2026-11-27) 轮换七张十三货四闸棋盘，最短解 517–520 步。
